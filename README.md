@@ -13,43 +13,42 @@ SrotaAI continuously ingests adverse-event signals from openFDA, Reddit, RSS fee
 
 **Requirements:** Python 3.11 or newer, git.
 
-#### Linux / macOS / WSL / Git Bash
+> ⚠️ **Important — pick the right command for your OS.**
+> `run.sh` is for Linux/macOS only. **Do not double-click it on Windows** — it will not work and may launch WSL.
+
+#### Windows (PowerShell, cmd, or double-click)
+
+```cmd
+git clone https://github.com/KritikaTri/srota-ai.git
+cd srota-ai
+run.bat
+```
+
+Or just double-click `run.bat` in File Explorer. Then open **http://localhost:8001**.
+
+#### macOS / Linux
 
 ```bash
 git clone https://github.com/KritikaTri/srota-ai.git
 cd srota-ai
+chmod +x run.sh
 ./run.sh
-```
-
-That's it. The script will:
-1. Create a `.venv/` virtual environment
-2. Install dependencies from `requirements.txt`
-3. Seed the SQLite signal database (one-time, ~10 seconds)
-4. Start the server on port 8001
-
-Then open **http://localhost:8001** in any browser.
-
-```bash
-./run.sh stop      # stop the server
-./run.sh restart   # restart with latest code
-tail -f server.log # watch logs
-```
-
-#### Windows (PowerShell or cmd, no WSL)
-
-```powershell
-git clone https://github.com/KritikaTri/srota-ai.git
-cd srota-ai
-python -m venv .venv
-.venv\Scripts\activate
-pip install -r requirements.txt
-python -m srotaai.signals pv-india-otc --db srotaai.db --min-n 2
-python -m uvicorn srotaai.web.app:app --host 0.0.0.0 --port 8001
 ```
 
 Then open **http://localhost:8001**.
 
-#### Docker (any OS)
+The script (whichever flavour) will:
+1. Create a `.venv/` virtual environment
+2. Install dependencies from `requirements.txt`
+3. Initialise the SQLite database from the included seed snapshot
+4. Start the server on port 8001
+
+```bash
+./run.sh stop      # or:  run.bat stop      stop the server
+./run.sh restart   # or:  run.bat restart   restart with latest code
+```
+
+#### Docker (any OS — most reliable)
 
 ```bash
 git clone https://github.com/KritikaTri/srota-ai.git
@@ -60,14 +59,32 @@ docker run -p 8001:8000 srotaai
 
 Then open **http://localhost:8001**.
 
+#### Manual fallback (any OS, no scripts)
+
+```bash
+python -m venv .venv
+# Linux/macOS:
+source .venv/bin/activate
+# Windows:
+.venv\Scripts\activate
+
+pip install -r requirements.txt
+copy srotaai_seed.db srotaai.db   # Windows
+cp srotaai_seed.db srotaai.db     # Linux/macOS
+python -m uvicorn srotaai.web.app:app --host 0.0.0.0 --port 8001
+```
+
 ### Troubleshooting
 
 | Problem | Fix |
 |---|---|
-| `python3: command not found` | Install Python 3.11+ from [python.org](https://python.org), then re-run |
-| `port 8001 already in use` | `./run.sh stop`, then start again — or set a different port: `PORT=9000 ./run.sh` |
-| `pip install` fails on `lxml` / `cryptography` | Install build tools: Linux `sudo apt install build-essential python3-dev`, macOS `xcode-select --install` |
-| Page is blank / CSS broken | Hard-refresh (Ctrl+Shift+R) — Tailwind cache-buster sometimes needs a kick |
+| Double-clicking `run.sh` on Windows opens WSL or fails | Use `run.bat` instead. `.sh` files are Linux/macOS only. |
+| `python: command not found` (Windows) | Install Python 3.11+ from [python.org](https://python.org), **check "Add Python to PATH"** during install, restart your terminal. |
+| `python3: command not found` (Linux/macOS) | Install Python 3.11+ from [python.org](https://python.org) or your package manager (`brew install python@3.11`, `apt install python3.11`). |
+| `port 8001 already in use` | Stop the existing server (`./run.sh stop` / `run.bat stop`), or pick a new port: `PORT=9000 ./run.sh` (Linux/macOS) / `set PORT=9000 && run.bat` (Windows). |
+| `pip install` fails on `lxml` / `cryptography` | Linux: `sudo apt install build-essential python3-dev`. macOS: `xcode-select --install`. Windows: install [Visual C++ Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/). |
+| Page is blank / CSS broken | Hard-refresh (Ctrl+Shift+R / Cmd+Shift+R). |
+| Nothing works at all | Try the **Docker** path — it sidesteps every Python/PATH issue. |
 
 **Health check:** `GET /_ping` returns a zero-CSS heartbeat page.
 
