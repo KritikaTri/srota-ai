@@ -498,7 +498,7 @@ def all_signals(store: Store) -> list[dict]:
             else:
                 d["trend"] = ("STABLE", "blue", "→", "stable")
         else:
-            d["trend"] = ("NEW", "blue", "✦", "first run")
+            d["trend"] = ("NEW", "blue", "✨", "preliminary")
         out.append(d)
     out.sort(key=lambda x: (x.get("prr") or 0), reverse=True)
     return out
@@ -576,7 +576,9 @@ def signal_detail(store: Store, sig_id: int) -> dict | None:
             ner_res = _ner_mod.extract(text)
         except Exception:
             continue
-        for (dp, ev) in (ner_res.drug_event_pairs or []):
+        # Mirror signals.py: dedupe pairs within a single record so n
+        # reflects distinct contributing records, not raw co-occurrence.
+        for (dp, ev) in set(ner_res.drug_event_pairs or []):
             dp_l, ev_l = (dp or "").lower(), (ev or "").lower()
             if not dp_l or not ev_l:
                 continue
@@ -717,12 +719,27 @@ def signal_detail(store: Store, sig_id: int) -> dict | None:
         rel_growth_pct = 100
     else:
         rel_growth_pct = 0
-    if rel_growth_pct > 15:
-        trend_status, trend_color, trend_icon = "Rising Signal", "red", "▲"
-    elif rel_growth_pct < -15:
-        trend_status, trend_color, trend_icon = "Declining Signal", "emerald", "▼"
+
+    # Trend label uses PRR history (same drug × event across runs) so the
+    # Triage Hub and Investigation Workspace agree. Falls back to growth-
+    # based labelling only when there's no prior signal row to compare.
+    prev = store.conn.execute(
+        """SELECT prr FROM signals
+            WHERE project_id=? AND drug=? AND event=? AND id<?
+            ORDER BY computed_at DESC, id DESC LIMIT 1""",
+        (pid, row["drug"], row["event"], sig_id),
+    ).fetchone()
+    if prev is not None and (prev["prr"] or 0) > 0:
+        cur = float(row["prr"] or 0)
+        prev_p = float(prev["prr"] or 0)
+        if cur > prev_p * 1.05:
+            trend_status, trend_color, trend_icon = "Rising Signal", "red", "▲"
+        elif cur < prev_p * 0.95:
+            trend_status, trend_color, trend_icon = "Declining Signal", "emerald", "▼"
+        else:
+            trend_status, trend_color, trend_icon = "Stable Signal", "blue", "→"
     else:
-        trend_status, trend_color, trend_icon = "Stable Signal", "blue", "→"
+        trend_status, trend_color, trend_icon = "Preliminary", "blue", "✨"
 
     # ---- Sentiment intelligence (per-signal evidence) ------------------
     sm: dict[str, int] = {}
@@ -1014,11 +1031,14 @@ def _decorate_signal(r: dict) -> dict:
     else:
         prr_color = "blue"
 
+    # Confidence: requires BOTH a strong disproportionality AND enough
+    # distinct records. PRR alone (or n alone) is not enough — that's how
+    # we used to mark every signal HIGH and lose credibility with reviewers.
     conf = max(20, min(99,
-        round(40 + 14 * math.log(max(prr, 1.0)) + 6 * math.log(max(n, 1)))))
-    if conf >= 80:
+        round(35 + 12 * math.log(max(prr, 1.0)) + 8 * math.log(max(n, 1)))))
+    if prr >= 3.0 and n >= 5 and chi >= 4.0:
         conf_label, conf_color = "HIGH", "red"
-    elif conf >= 60:
+    elif prr >= 2.0 and n >= 3 and chi >= 4.0:
         conf_label, conf_color = "MEDIUM", "amber"
     else:
         conf_label, conf_color = "LOW", "gray"
@@ -1059,7 +1079,7 @@ def _decorate_signal(r: dict) -> dict:
         "first_detected": (r.get("computed_at") or "")[:10],
         "src_count":  0,
         "src_names":  "",
-        "trend":      ("NEW", "blue", "✦", "first run"),
+        "trend":      ("NEW", "blue", "✨", "preliminary"),
     }
 
 
@@ -1096,9 +1116,19 @@ ACTION_LABELS = {
 
 
 def audit_tail(store: Store, limit: int = 8, full: bool = False) -> list[dict]:
+    # Filter out QA / smoke-test project noise from the visible compliance log.
+    # The chain itself still contains every event (verify still walks all rows
+    # in the DB) — we just don't surface QA scratch projects in the UI.
     rows = store.conn.execute(
         """SELECT id, ts, actor, action, target, hash
-             FROM audit_log ORDER BY id DESC LIMIT ?""", (limit,)
+             FROM audit_log
+             WHERE COALESCE(target,'') NOT LIKE 'qa-%'
+               AND COALESCE(target,'') NOT LIKE 'QA-%'
+               AND COALESCE(target,'') NOT LIKE 'QA %'
+               AND COALESCE(target,'') NOT LIKE 'test%'
+               AND COALESCE(target,'') NOT LIKE 'dhruv_test%'
+               AND COALESCE(target,'') NOT LIKE 'smoke%'
+             ORDER BY id DESC LIMIT ?""", (limit,)
     ).fetchall()
     out = []
     for r in rows:

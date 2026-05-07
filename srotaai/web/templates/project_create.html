@@ -85,15 +85,17 @@
         <input data-f="name" class="mt-0.5 w-full rounded border border-slate-300 px-2 py-1.5 text-sm" placeholder="reddit-india"/></label>
       <label class="md:col-span-3"><span class="text-xs font-medium text-slate-700">Connector</span>
         <select data-f="connector" class="mt-0.5 w-full rounded border border-slate-300 px-2 py-1.5 text-sm bg-white">
-          <option value="reddit">reddit</option>
-          <option value="rss">rss (news / FDA recalls)</option>
-          <option value="openfda">openfda (real FAERS)</option>
-          <option value="webpage">webpage (e.g. tata1mg, 1mg, drugs.com)</option>
-          <option value="x_stub">x (twitter stub)</option>
-          <option value="faers">faers (synthetic — demo only)</option>
+          <option value="reddit">Reddit (subreddit)</option>
+          <option value="rss">RSS / Atom feed</option>
+          <option value="openfda">openFDA (FAERS)</option>
+          <option value="webpage">Webpage (1mg, drugs.com, forums)</option>
+          <option value="x_stub">X / Twitter</option>
         </select></label>
-      <label class="md:col-span-4"><span class="text-xs font-medium text-slate-700">Params (JSON) <span class="text-[10px] text-slate-400">— or just paste a URL for webpage</span></span>
-        <input data-f="params" class="mt-0.5 w-full rounded border border-slate-300 px-2 py-1.5 text-sm font-mono" placeholder='{"subreddit":"india","limit":50}  •  https://www.1mg.com/drugs/...'/></label>
+      <label class="md:col-span-4">
+        <span class="text-xs font-medium text-slate-700" data-f="detail-label">Subreddit name</span>
+        <input data-f="detail" class="mt-0.5 w-full rounded border border-slate-300 px-2 py-1.5 text-sm" placeholder="e.g. india"/>
+        <span class="text-[10px] text-slate-400 mt-0.5 block" data-f="detail-hint">Just the name &mdash; not the full URL.</span>
+      </label>
       <label class="md:col-span-1 flex items-center gap-1 mt-5">
         <input type="checkbox" data-f="enabled" checked class="rounded"/>
         <span class="text-xs">on</span>
@@ -104,47 +106,62 @@
 </template>
 
 <script>
+const DETAIL_HINTS = {
+  reddit:  { label: "Subreddit name",      placeholder: "e.g. india",                                  hint: "Just the name &mdash; not the full URL." },
+  rss:     { label: "Feed URL",            placeholder: "https://www.fda.gov/.../recalls.xml",         hint: "Any RSS or Atom feed." },
+  openfda: { label: "Drug / search term",  placeholder: "e.g. metformin",                              hint: "Searches openFDA's adverse-event reports." },
+  webpage: { label: "Page URL",            placeholder: "https://www.1mg.com/drugs/paracetamol-501",  hint: "Any review / forum page. Stealth fetcher handles selectors." },
+  x_stub:  { label: "Search query",        placeholder: "metformin side effects",                      hint: "Used as the X (Twitter) search term." },
+};
+function refreshHint(row){
+  const conn = row.querySelector('[data-f=connector]').value;
+  const cfg  = DETAIL_HINTS[conn] || DETAIL_HINTS.reddit;
+  row.querySelector('[data-f=detail-label]').textContent = cfg.label;
+  const inp = row.querySelector('[data-f=detail]');
+  inp.placeholder = cfg.placeholder;
+  row.querySelector('[data-f=detail-hint]').innerHTML = cfg.hint;
+}
 function gather(){
   const rows=[...document.querySelectorAll('#sources-list .src-row')];
   const arr=rows.map(r=>{
-    const rawParams=r.querySelector('[data-f=params]').value.trim();
-    let p={}, conn=r.querySelector('[data-f=connector]').value;
-    // Webpage shortcut: user can paste a bare URL instead of JSON.
-    if (conn === 'webpage') {
+    const v = r.querySelector('[data-f=detail]').value.trim();
+    let conn = r.querySelector('[data-f=connector]').value;
+    let p = {};
+    if (conn === 'reddit')       p = { subreddit: v.replace(/^r\//,'').replace(/^https?:\/\/(www\.)?reddit\.com\//,''), limit: 50 };
+    else if (conn === 'rss')     p = { url: v };
+    else if (conn === 'openfda') p = { search: v, limit: 200 };
+    else if (conn === 'x_stub')  p = { query: v };
+    else if (conn === 'webpage') {
       conn = 'html_stealth';
-      if (/^https?:\/\//i.test(rawParams)) {
-        p = {
-          url: rawParams,
-          list_selector: 'div.review-item, article, li.comment, div.user-review',
-          title_selector: 'h2, h3, p.review-text, .title',
-          body_selector:  'p, .review-text, .body, .description',
-          link_selector:  'a',
-        };
-      } else {
-        try { p = JSON.parse(rawParams || '{}'); } catch {}
-      }
-    } else {
-      try { p = JSON.parse(rawParams || '{}'); } catch {}
+      p = {
+        url: v,
+        list_selector:  'div.review-item, article, li.comment, div.user-review',
+        title_selector: 'h2, h3, p.review-text, .title',
+        body_selector:  'p, .review-text, .body, .description',
+        link_selector:  'a',
+      };
     }
     return {
-      name:r.querySelector('[data-f=name]').value.trim(),
-      connector:conn,
-      params:p,
-      latency:'daily',
-      enabled:r.querySelector('[data-f=enabled]').checked
+      name: r.querySelector('[data-f=name]').value.trim(),
+      connector: conn,
+      params: p,
+      latency: 'daily',
+      enabled: r.querySelector('[data-f=enabled]').checked,
     };
-  }).filter(s=>s.connector);
-  document.getElementById('sources_json').value=JSON.stringify(arr);
+  }).filter(s => s.connector && s.name);
+  document.getElementById('sources_json').value = JSON.stringify(arr);
 }
 function addSource(){
-  const t=document.getElementById('src-tpl').content.cloneNode(true);
-  const row=t.querySelector('.src-row');
-  row.querySelector('[data-f=remove]').onclick=()=>{row.remove();gather();};
-  row.querySelectorAll('input,select').forEach(i=>i.addEventListener('input',gather));
+  const t = document.getElementById('src-tpl').content.cloneNode(true);
+  const row = t.querySelector('.src-row');
+  row.querySelector('[data-f=remove]').onclick = () => { row.remove(); gather(); };
+  row.querySelector('[data-f=connector]').addEventListener('change', () => refreshHint(row));
+  row.querySelectorAll('input,select').forEach(i => i.addEventListener('input', gather));
   document.getElementById('sources-list').appendChild(row);
+  refreshHint(row);
   gather();
 }
-document.getElementById('proj-form').addEventListener('submit',gather);
+document.getElementById('proj-form').addEventListener('submit', gather);
 addSource();
 </script>
 {% endblock %}

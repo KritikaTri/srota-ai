@@ -108,7 +108,13 @@ def run(project_id: str, db_path: Path | None = None,
             if s.label not in ("adverse", "negative"):
                 continue
         n_with_pairs += 1
-        for pair in ner_res.drug_event_pairs:
+        # IMPORTANT: dedupe pairs WITHIN this record. The PV interpretation
+        # of n is "distinct reports/records mentioning this drug × event",
+        # not "raw co-occurrence count". A single Reddit post that says
+        # "metformin gave me lactic acidosis. metformin is awful, lactic
+        # acidosis ruined me" should count as 1, not 4. Keeps the math
+        # honest and aligned with FAERS practice.
+        for pair in set(ner_res.drug_event_pairs):
             pairs.append(pair)
             pair_examples.setdefault(pair, []).append(text[:140])
 

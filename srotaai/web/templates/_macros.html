@@ -41,9 +41,12 @@
 {# Active Data Pipeline strip — exact reference layout #}
 {% macro pipeline_strip(stages) %}
 <section class="bg-white border border-slate-200 rounded-xl shadow-sm p-5">
-  <div class="flex items-center justify-between mb-4">
-    <h2 class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-700">Active Data Pipeline</h2>
-    <div class="inline-flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
+  <div class="flex items-start justify-between mb-4 gap-3">
+    <div>
+      <h2 class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-700">Active Data Pipeline</h2>
+      <p class="text-xs text-slate-500 mt-0.5">Sources → records → entities → signals. Each stage shows current throughput.</p>
+    </div>
+    <div class="inline-flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 whitespace-nowrap">
       <span class="relative flex h-1.5 w-1.5">
         <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-75"></span>
         <span class="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
