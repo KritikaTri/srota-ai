@@ -58,9 +58,11 @@ python -m srotaai.pii eval | python -c "import sys,json; print(json.loads(sys.st
 
 ---
 
-## Adding a new source
+## Configuring a new data source (no code required)
 
-Connectors available: `openfda`, `reddit`, `rss`, `html_stealth` (any URL with CSS selectors), `whatsapp` (Meta Cloud webhook, fixture-driven). Add a block to your project YAML:
+SrotaAI ships with these connectors out of the box: `openfda`, `reddit`, `rss`, `html_stealth` (works with **any URL** via CSS selectors), and `whatsapp` (Meta Cloud webhook, fixture-driven).
+
+To onboard a new source, add a block to your project YAML — no Python edits, no redeploy. For example, to start tracking 1mg paracetamol reviews:
 
 ```yaml
 sources:
@@ -73,7 +75,7 @@ sources:
     latency: daily
 ```
 
-Restart, and records start landing in the same pipeline.
+Restart the server and records flow through the same ingestion → NER → PRR → audit pipeline.
 
 ---
 
