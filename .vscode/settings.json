@@ -1,0 +1,13 @@
+{
+  "remote.autoForwardPortsSource": "process",
+  "remote.portsAttributes": {
+    "8001": {
+      "label": "SrotaAI",
+      "onAutoForward": "openBrowser",
+      "protocol": "http"
+    }
+  },
+  "remote.otherPortsAttributes": {
+    "onAutoForward": "ignore"
+  }
+}
