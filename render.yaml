@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: srotaai
+    runtime: python
+    buildCommand: pip install -r requirements.txt && python -m srotaai.signals pv-india-otc --db srotaai.db --min-n 2
+    startCommand: uvicorn srotaai.web.app:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11"
+    disk:
+      name: srotaai-data
+      mountPath: /opt/render/project/src
+      sizeGB: 1
