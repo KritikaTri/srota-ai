@@ -39,11 +39,18 @@
 
 
 {# Active Data Pipeline strip — exact replica of reference app #}
+{# stages = [(label, value, icon_svg, color), ...]   color in: blue|indigo|violet|red #}
 {% macro pipeline_strip(stages) %}
+{%- set GRADS = {
+  'blue':   'linear-gradient(135deg, #60a5fa 0%, #2563eb 100%)',
+  'indigo': 'linear-gradient(135deg, #818cf8 0%, #4f46e5 100%)',
+  'violet': 'linear-gradient(135deg, #c084fc 0%, #7c3aed 100%)',
+  'red':    'linear-gradient(135deg, #f87171 0%, #dc2626 100%)'
+} -%}
 <section class="bg-white border border-slate-200 rounded-xl shadow-sm p-6">
-  <div class="flex items-center justify-between mb-6">
+  <div class="flex items-center justify-between mb-8">
     <h2 class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-700">Active Data Pipeline</h2>
-    <div class="inline-flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-emerald-600 whitespace-nowrap">
+    <div class="inline-flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-emerald-600">
       <span class="relative flex h-2 w-2">
         <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-75"></span>
         <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
@@ -51,36 +58,26 @@
       Live Processing
     </div>
   </div>
-  {% set ncols = stages|length * 2 - 1 %}
-  <div class="grid items-start gap-x-4" style="grid-template-columns: repeat({{ ncols }}, minmax(0, 1fr));">
-    {# row 1: icons + arrows, all at the same vertical level #}
+
+  <div class="flex items-start justify-between gap-2">
     {% for label, value, icon_svg, color in stages %}
-      <div class="flex justify-center">
-        <div class="w-16 h-16 rounded-2xl flex items-center justify-center shadow-md
-          {% if color=='blue'   %}bg-gradient-to-br from-blue-400 to-blue-600{% endif %}
-          {% if color=='indigo' %}bg-gradient-to-br from-indigo-400 to-indigo-600{% endif %}
-          {% if color=='violet' %}bg-gradient-to-br from-violet-400 to-violet-600{% endif %}
-          {% if color=='red'    %}bg-gradient-to-br from-red-400 to-red-600{% endif %}">
+      {# stage column #}
+      <div class="flex-1 flex flex-col items-center text-center min-w-0">
+        <div class="w-16 h-16 rounded-2xl flex items-center justify-center"
+             style="background: {{ GRADS[color] }}; box-shadow: 0 6px 16px -4px rgba(15,23,42,0.18);">
           {{ icon_svg|safe }}
         </div>
+        <div class="mt-4 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">{{ label }}</div>
+        <div class="mt-1 text-3xl font-bold tabular-nums text-slate-900 leading-none">{{ value }}</div>
       </div>
       {% if not loop.last %}
-        <div class="flex items-center justify-center h-16 text-slate-300">
-          <svg width="48" height="16" viewBox="0 0 48 16" fill="none" stroke="currentColor" stroke-width="1.5">
-            <path d="M2 8h40M36 2l6 6-6 6"/>
+        {# arrow column — fixed width, vertically aligned to icon row only #}
+        <div class="shrink-0" style="width: 60px; height: 64px; display: flex; align-items: center; justify-content: center;">
+          <svg width="56" height="14" viewBox="0 0 56 14" fill="none" stroke="#cbd5e1" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M2 7h46M44 2l6 5-6 5"/>
           </svg>
         </div>
       {% endif %}
-    {% endfor %}
-    {# row 2: labels (only under icons, blank under arrows) #}
-    {% for label, value, icon_svg, color in stages %}
-      <div class="text-center mt-3 text-[10px] font-bold uppercase tracking-wider text-slate-500">{{ label }}</div>
-      {% if not loop.last %}<div></div>{% endif %}
-    {% endfor %}
-    {# row 3: values #}
-    {% for label, value, icon_svg, color in stages %}
-      <div class="text-center mt-1 text-2xl font-bold tabular-nums text-slate-900">{{ value }}</div>
-      {% if not loop.last %}<div></div>{% endif %}
     {% endfor %}
   </div>
 </section>
