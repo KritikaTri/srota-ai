@@ -281,6 +281,7 @@ async def project_create_submit(
             sources = []
         kws = [k.strip() for k in keywords.replace(",", "\n").splitlines()
                if k.strip()]
+
         if not project_id.strip() or not kws or not sources:
             ctx = _common("projects", s)
             ctx.update(
@@ -288,11 +289,16 @@ async def project_create_submit(
                 form={"id": project_id, "name": name,
                       "description": description, "keywords": keywords,
                       "lookback_days": lookback_days, "cadence": cadence},
-                error="Project ID, at least one keyword, and at least one source are required.",
+                error="Project name, at least one keyword, and at least one source are required.",
             )
             return templates.TemplateResponse(request, "project_create.html",
                                               ctx, status_code=400)
 
+        # UI exposes REAL-TIME / HOURLY / DAILY; backend scheduler knows
+        # real_time / daily / weekly / manual. Map HOURLY to real_time
+        # (closest cadence the scheduler supports).
+        if cadence == "hourly":
+            cadence = "real_time"
         if cadence not in ("real_time", "daily", "weekly", "manual"):
             cadence = "daily"
 

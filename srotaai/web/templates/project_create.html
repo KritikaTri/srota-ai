@@ -1,167 +1,443 @@
 {% extends "base.html" %}
-{% import "_macros.html" as ui %}
 
 {% block content %}
-<div class="max-w-3xl">
-  <div class="mb-6">
-    <a href="/projects" class="text-sm text-slate-500 hover:text-slate-700">← All projects</a>
-    <h1 class="mt-2 text-2xl font-bold text-slate-900 tracking-tight">Create Project</h1>
-    <p class="mt-1 text-sm text-slate-500">Define keywords, sources, and a time window. Edit freely later.</p>
-  </div>
+<style>
+  /* =========================================================
+     Self-contained styles (avoid Tailwind classes missing
+     from the precompiled tailwind.css).
+     ========================================================= */
+  .pc-shell      { max-width: 1200px; margin: 0 auto; }
+  .pc-card       { background:#fff; border:1px solid #e2e8f0; border-radius:14px;
+                   box-shadow:0 1px 2px rgba(15,23,42,.04); overflow:hidden; }
 
-  {% if error %}
-  <div class="mb-4 bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3">{{ error }}</div>
-  {% endif %}
+  .pc-head       { padding:20px 28px; border-bottom:1px solid #e2e8f0;
+                   display:flex; justify-content:space-between; align-items:flex-start; gap:12px; }
+  .pc-head h2    { font-size:20px; line-height:1.2; font-weight:700; color:#0f172a;
+                   letter-spacing:-0.01em; margin:0; }
+  .pc-head p     { margin:4px 0 0 0; font-size:13px; color:#64748b; }
+  .pc-close      { color:#94a3b8; padding:3px; border-radius:6px; line-height:0; }
+  .pc-close:hover{ color:#0f172a; background:#f1f5f9; }
 
-  <form method="post" action="/projects/new" id="proj-form" class="space-y-6">
+  .pc-body       { display:grid; grid-template-columns:1.45fr 1fr; }
+  @media (max-width:980px){ .pc-body { grid-template-columns:1fr; } }
+  .pc-left       { padding:22px 28px; border-right:1px solid #f1f5f9;
+                   display:flex; flex-direction:column; gap:18px; }
+  .pc-right      { padding:22px 28px; background:#f8fafc;
+                   display:flex; flex-direction:column; min-height:0; }
 
-    <section class="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
-      <div class="text-[11px] font-bold uppercase tracking-wider text-blue-600 mb-3">Step 1 · Identity</div>
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <label class="block">
-          <span class="text-sm font-medium text-slate-700">Project ID</span>
-          <input name="project_id" required value="{{ form.id }}" placeholder="pv-india-otc"
-            class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:border-blue-500 font-mono"/>
-          <span class="text-[11px] text-slate-500 mt-1 block">Lowercase, dashes. Used as filename and DB key.</span>
-        </label>
-        <label class="block">
-          <span class="text-sm font-medium text-slate-700">Display name</span>
-          <input name="name" value="{{ form.name }}" placeholder="India OTC Pharmacovigilance"
-            class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:border-blue-500"/>
-        </label>
-        <label class="block md:col-span-2">
-          <span class="text-sm font-medium text-slate-700">Description</span>
-          <textarea name="description" rows="2" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:border-blue-500">{{ form.description }}</textarea>
-        </label>
+  .pc-label      { font-size:11px; font-weight:700; letter-spacing:0.13em;
+                   text-transform:uppercase; color:#334155; }
+
+  .pc-input,
+  .pc-textarea,
+  .pc-select     { width:100%; box-sizing:border-box; background:#f8fafc;
+                   border:1px solid #e2e8f0; border-radius:9px;
+                   padding:10px 14px; font-size:13px; color:#0f172a;
+                   font-family:'JetBrains Mono', ui-monospace, monospace;
+                   outline:none; transition:border-color .15s, background .15s; }
+  .pc-input::placeholder,
+  .pc-textarea::placeholder { color:#94a3b8; }
+  .pc-input:focus,
+  .pc-textarea:focus,
+  .pc-select:focus { background:#fff; border-color:#60a5fa; }
+  .pc-textarea   { resize:none; }
+  .pc-select     { appearance:none; background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23475569' stroke-width='2'><path d='m6 9 6 6 6-6'/></svg>");
+                   background-repeat:no-repeat; background-position:right 12px center; padding-right:32px; }
+
+  /* Add-row (input + circular + button) — used by keywords */
+  .pc-add-row    { position:relative; }
+  .pc-add-row .pc-input { padding-right:42px; }
+  .pc-add-btn    { position:absolute; right:7px; top:50%; transform:translateY(-50%);
+                   width:28px; height:28px; border:0; background:transparent;
+                   color:#94a3b8; border-radius:9999px; cursor:pointer;
+                   display:flex; align-items:center; justify-content:center; padding:0; }
+  .pc-add-btn:hover { color:#2563eb; background:#eff6ff; }
+
+  .pc-hint-pill  { font-size:10px; font-weight:600; letter-spacing:0.1em;
+                   text-transform:uppercase; color:#94a3b8;
+                   border:1px solid #e2e8f0; border-radius:6px;
+                   padding:4px 7px; font-family:'JetBrains Mono', ui-monospace, monospace; }
+
+  .pc-chips      { margin-top:9px; min-height:130px;
+                   border:1px dashed #e2e8f0; border-radius:9px;
+                   padding:14px; display:flex; flex-wrap:wrap; align-content:flex-start;
+                   gap:7px; }
+  .pc-chips.is-empty::before { content:'( No keywords defined )'; width:100%;
+                   text-align:center; color:#94a3b8; font-size:12px;
+                   font-family:'JetBrains Mono', ui-monospace, monospace;
+                   align-self:center; margin:auto; }
+  .pc-chip       { display:inline-flex; align-items:center; gap:7px;
+                   background:#eff6ff; color:#1d4ed8; border:1px solid #bfdbfe;
+                   padding:4px 10px; border-radius:9999px; font-size:12px;
+                   font-family:'JetBrains Mono', ui-monospace, monospace; line-height:1; }
+  .pc-chip button{ background:transparent; border:0; color:#1d4ed8; opacity:.55;
+                   line-height:1; font-size:14px; cursor:pointer; padding:0; }
+  .pc-chip button:hover{ opacity:1; }
+
+  .pc-section    { display:flex; flex-direction:column; gap:7px; }
+  .pc-section + .pc-section { margin-top:18px; }
+
+  /* Cadence (3-column horizontal pills, compact) */
+  .pc-cad-row    { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; }
+  .pc-cad-btn    { padding:10px 8px; border:1px solid #e2e8f0; background:#fff;
+                   border-radius:9px; font-size:11px; font-weight:700; color:#334155;
+                   letter-spacing:0.12em; cursor:pointer; text-align:center;
+                   transition:background .15s, color .15s, border-color .15s; }
+  .pc-cad-btn:hover { border-color:#cbd5e1; }
+  .pc-cad-btn.is-selected { background:#2563eb; color:#fff; border-color:#2563eb; }
+
+  /* Trend window 4 horizontal */
+  .pc-win-grid   { display:grid; grid-template-columns:repeat(4, 1fr); gap:8px; }
+  .pc-win-btn    { padding:10px 8px; border:1px solid #e2e8f0; background:#fff;
+                   border-radius:9px; font-size:12px; font-weight:700; color:#334155;
+                   cursor:pointer; text-align:center;
+                   transition:background .15s, color .15s, border-color .15s; }
+  .pc-win-btn:hover { border-color:#cbd5e1; }
+  .pc-win-btn.is-selected { background:#0f172a; color:#fff; border-color:#0f172a; }
+
+  .pc-row-head   { display:flex; align-items:center; justify-content:space-between; }
+  .pc-range      { font-size:11px; font-weight:600; color:#2563eb; }
+
+  /* ======================== SOURCES (right) ======================== */
+  .pc-src-section{ display:flex; flex-direction:column; gap:10px; flex:1; min-height:0; }
+  .pc-src-builder{ background:#fff; border:1px solid #e2e8f0; border-radius:10px; padding:12px; }
+  .pc-src-grid   { display:grid; grid-template-columns:1fr; gap:8px; }
+  .pc-src-row2   { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .pc-src-add    { width:100%; padding:9px 14px; background:#0f172a; color:#fff;
+                   border:0; border-radius:8px; font-size:11px; font-weight:700;
+                   letter-spacing:0.14em; text-transform:uppercase; cursor:pointer;
+                   margin-top:6px; }
+  .pc-src-add:hover { background:#1e293b; }
+
+  .pc-src-list   { flex:1; min-height:140px; max-height:340px; overflow-y:auto;
+                   border:1px dashed #e2e8f0; border-radius:10px; padding:10px;
+                   display:flex; flex-direction:column; gap:8px; background:#fff; }
+  .pc-src-list.is-empty { align-items:center; justify-content:center; }
+  .pc-src-list.is-empty::before { content:'( No sources added — add at least one )';
+                   color:#94a3b8; font-size:12px;
+                   font-family:'JetBrains Mono', ui-monospace, monospace; }
+  .pc-src-item   { display:flex; align-items:center; gap:10px;
+                   border:1px solid #e2e8f0; border-radius:9px; padding:8px 10px;
+                   background:#f8fafc; }
+  .pc-src-item .badge { font-size:10px; font-weight:700; letter-spacing:0.08em;
+                   text-transform:uppercase; padding:3px 8px; border-radius:6px;
+                   background:#eff6ff; color:#1d4ed8; border:1px solid #bfdbfe;
+                   white-space:nowrap; }
+  .pc-src-item .name { font-size:12px; font-weight:600; color:#0f172a;
+                   font-family:'JetBrains Mono', ui-monospace, monospace; }
+  .pc-src-item .meta { font-size:11px; color:#64748b;
+                   font-family:'JetBrains Mono', ui-monospace, monospace;
+                   white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; }
+  .pc-src-item .grow { flex:1; min-width:0; }
+  .pc-src-item .rm   { background:transparent; border:0; color:#dc2626; opacity:.6;
+                   font-size:13px; cursor:pointer; padding:2px 6px; border-radius:6px; }
+  .pc-src-item .rm:hover { opacity:1; background:#fef2f2; }
+
+  .pc-src-list::-webkit-scrollbar { width:8px; }
+  .pc-src-list::-webkit-scrollbar-thumb { background:#cbd5e1; border-radius:4px; }
+
+  /* ======================== Submit ======================== */
+  .pc-submit-area{ margin-top:14px; }
+  .pc-submit     { width:100%; padding:13px 16px; background:#2563eb; color:#fff;
+                   border:0; border-radius:9px; font-size:12px; font-weight:700;
+                   letter-spacing:0.17em; text-transform:uppercase; cursor:pointer;
+                   box-shadow:0 1px 2px rgba(15,23,42,.05);
+                   transition:background .15s; }
+  .pc-submit:hover{ background:#1d4ed8; }
+  .pc-submit:disabled { background:#94a3b8; cursor:not-allowed; }
+  .pc-submit-note{ margin-top:8px; text-align:center; font-size:11px; color:#94a3b8; }
+
+  .pc-error      { background:#fef2f2; border:1px solid #fecaca; color:#b91c1c;
+                   padding:10px 14px; border-radius:9px; font-size:13px; margin-bottom:12px; }
+</style>
+
+<div class="pc-shell">
+
+  {% if error %}<div class="pc-error">{{ error }}</div>{% endif %}
+
+  <form method="post" action="/projects/new" id="proj-form" class="pc-card">
+
+    <div class="pc-head">
+      <div>
+        <h2>Configure Surveillance Project</h2>
+        <p>Define parameters and data sources for automated pharmacovigilance monitoring.</p>
       </div>
-    </section>
+      <a href="/projects" class="pc-close" aria-label="Close">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </a>
+    </div>
 
-    <section class="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
-      <div class="text-[11px] font-bold uppercase tracking-wider text-indigo-600 mb-3">Step 2 · Scope</div>
-      <label class="block">
-        <span class="text-sm font-medium text-slate-700">Keywords <span class="text-slate-400 font-normal">(comma- or newline-separated)</span></span>
-        <textarea name="keywords" rows="3" required placeholder="paracetamol, ibuprofen, dolo&#10;rash, fever"
-          class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-mono focus:outline-none focus:border-blue-500">{{ form.keywords }}</textarea>
-        <span class="text-[11px] text-slate-500 mt-1 block">Synonym expansion runs on first execution.</span>
-      </label>
-      <label class="block mt-4 max-w-xs">
-        <span class="text-sm font-medium text-slate-700">Lookback window (days)</span>
-        <input type="number" name="lookback_days" value="{{ form.lookback_days }}" min="1" max="365"
-          class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:border-blue-500"/>
-      </label>
-      <label class="block mt-4 max-w-xs">
-        <span class="text-sm font-medium text-slate-700">Fetch cadence</span>
-        <select name="cadence" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white focus:outline-none focus:border-blue-500">
-          <option value="real_time" {% if form.cadence=='real_time' %}selected{% endif %}>Real-time · every 5 min</option>
-          <option value="daily"     {% if (form.cadence or 'daily')=='daily' %}selected{% endif %}>Daily · every 24 h</option>
-          <option value="weekly"    {% if form.cadence=='weekly' %}selected{% endif %}>Weekly · every 7 d</option>
-          <option value="manual"    {% if form.cadence=='manual' %}selected{% endif %}>Manual only</option>
-        </select>
-        <span class="text-[11px] text-slate-500 mt-1 block">Scheduler re-fetches and re-scores on this interval.</span>
-      </label>
-    </section>
+    <div class="pc-body">
 
-    <section class="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
-      <div class="flex items-center justify-between mb-3">
-        <div class="text-[11px] font-bold uppercase tracking-wider text-violet-600">Step 3 · Sources</div>
-        <button type="button" onclick="addSource()" class="text-sm font-medium text-blue-600 hover:text-blue-700">+ Add source</button>
+      <!-- ============ LEFT — config ============ -->
+      <div class="pc-left">
+
+        <div class="pc-section">
+          <div class="pc-label">Project Name</div>
+          <input id="f-name" name="name" required value="{{ form.name }}"
+                 class="pc-input" placeholder="e.g., Rare Oncology ADR Monitor"/>
+        </div>
+
+        <div class="pc-section">
+          <div class="pc-label">Scope &amp; Instructions</div>
+          <textarea name="description" rows="3" class="pc-textarea"
+                    placeholder="Describe specific signals or substances to monitor...">{{ form.description }}</textarea>
+        </div>
+
+        <div class="pc-section">
+          <div class="pc-row-head">
+            <div class="pc-label">Extraction Keywords</div>
+            <span class="pc-hint-pill">Press Enter to Add</span>
+          </div>
+          <div class="pc-add-row">
+            <input id="kw-input" type="text" class="pc-input" placeholder="Type term…"/>
+            <button type="button" id="kw-add" class="pc-add-btn" aria-label="Add keyword">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg>
+            </button>
+          </div>
+          <div id="kw-chips" class="pc-chips is-empty"></div>
+        </div>
+
+        <div class="pc-section">
+          <div class="pc-label">Analysis Cadence</div>
+          <div class="pc-cad-row">
+            <button type="button" data-val="real_time" class="pc-cad-btn">REAL-TIME</button>
+            <button type="button" data-val="hourly"    class="pc-cad-btn">HOURLY</button>
+            <button type="button" data-val="daily"     class="pc-cad-btn">DAILY</button>
+          </div>
+        </div>
+
+        <div class="pc-section">
+          <div class="pc-row-head">
+            <div class="pc-label">Trend Window</div>
+            <span class="pc-range">Range</span>
+          </div>
+          <div class="pc-win-grid">
+            <button type="button" data-val="30"  class="pc-win-btn">30 Days</button>
+            <button type="button" data-val="90"  class="pc-win-btn">90 Days</button>
+            <button type="button" data-val="180" class="pc-win-btn">180 Days</button>
+            <button type="button" data-val="365" class="pc-win-btn">365 Days</button>
+          </div>
+        </div>
+
+        <!-- hidden serializers -->
+        <input type="hidden" name="keywords"      id="f-keywords"     value="{{ form.keywords }}"/>
+        <input type="hidden" name="project_id"    id="f-project_id"   value="{{ form.id }}"/>
+        <input type="hidden" name="sources_json"  id="f-sources_json" value="[]"/>
+        <input type="hidden" name="cadence"       id="f-cadence"      value="{{ form.cadence or 'daily' }}"/>
+        <input type="hidden" name="lookback_days" id="f-lookback"     value="{{ form.lookback_days or 30 }}"/>
       </div>
-      <div id="sources-list" class="space-y-3"></div>
-      <input type="hidden" name="sources_json" id="sources_json" value="[]"/>
-      <p class="mt-3 text-[11px] text-slate-500">At least one enabled source required.</p>
-    </section>
 
-    <div class="flex items-center gap-3">
-      <button type="submit" class="bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold px-5 py-2.5 rounded-lg shadow-sm">Create &amp; Start Fetching</button>
-      <a href="/projects" class="text-sm text-slate-500 hover:text-slate-700">Cancel</a>
+      <!-- ============ RIGHT — sources ============ -->
+      <div class="pc-right">
+
+        <div class="pc-src-section">
+          <div class="pc-row-head">
+            <div class="pc-label">Data Sources</div>
+            <span class="pc-hint-pill" id="src-counter">0 SOURCES</span>
+          </div>
+
+          <!-- builder -->
+          <div class="pc-src-builder">
+            <div class="pc-src-grid">
+              <div class="pc-src-row2">
+                <select id="src-conn" class="pc-select">
+                  <option value="reddit">Reddit (subreddit)</option>
+                  <option value="rss">RSS / Atom feed</option>
+                  <option value="openfda">openFDA (FAERS)</option>
+                  <option value="html_stealth">Webpage (1mg, drugs.com…)</option>
+                  <option value="x_stub">X / Twitter</option>
+                  <option value="whatsapp">WhatsApp (Meta Cloud)</option>
+                </select>
+                <input id="src-name" class="pc-input" placeholder="source name (e.g. reddit-india)"/>
+              </div>
+              <input id="src-detail" class="pc-input" placeholder="Subreddit name"/>
+              <span id="src-hint" style="font-size:10px; color:#94a3b8; font-family:'JetBrains Mono', ui-monospace, monospace;">Just the name — e.g. <b>india</b> or <b>AskDocs</b>.</span>
+              <button type="button" id="src-add" class="pc-src-add">+ Add Source</button>
+            </div>
+          </div>
+
+          <!-- list -->
+          <div id="src-list" class="pc-src-list is-empty"></div>
+        </div>
+
+        <div class="pc-submit-area">
+          <button type="submit" id="submit-btn" class="pc-submit">Create Project</button>
+          <p class="pc-submit-note">All signal extraction nodes will be instantiated upon submission.</p>
+        </div>
+      </div>
+
     </div>
   </form>
 </div>
 
-<template id="src-tpl">
-  <div class="src-row border border-slate-200 rounded-lg p-3 bg-slate-50/40">
-    <div class="grid grid-cols-1 md:grid-cols-12 gap-2 items-end">
-      <label class="md:col-span-3"><span class="text-xs font-medium text-slate-700">Name</span>
-        <input data-f="name" class="mt-0.5 w-full rounded border border-slate-300 px-2 py-1.5 text-sm" placeholder="reddit-india"/></label>
-      <label class="md:col-span-3"><span class="text-xs font-medium text-slate-700">Connector</span>
-        <select data-f="connector" class="mt-0.5 w-full rounded border border-slate-300 px-2 py-1.5 text-sm bg-white">
-          <option value="reddit">Reddit (subreddit)</option>
-          <option value="rss">RSS / Atom feed</option>
-          <option value="openfda">openFDA (FAERS)</option>
-          <option value="webpage">Webpage (1mg, drugs.com, forums)</option>
-          <option value="x_stub">X / Twitter</option>
-        </select></label>
-      <label class="md:col-span-4">
-        <span class="text-xs font-medium text-slate-700" data-f="detail-label">Subreddit name</span>
-        <input data-f="detail" class="mt-0.5 w-full rounded border border-slate-300 px-2 py-1.5 text-sm" placeholder="e.g. india"/>
-        <span class="text-[10px] text-slate-400 mt-0.5 block" data-f="detail-hint">Just the name &mdash; not the full URL.</span>
-      </label>
-      <label class="md:col-span-1 flex items-center gap-1 mt-5">
-        <input type="checkbox" data-f="enabled" checked class="rounded"/>
-        <span class="text-xs">on</span>
-      </label>
-      <button type="button" data-f="remove" class="md:col-span-1 text-xs text-red-600 hover:text-red-700">Remove</button>
-    </div>
-  </div>
-</template>
-
 <script>
-const DETAIL_HINTS = {
-  reddit:  { label: "Subreddit name",      placeholder: "e.g. india",                                  hint: "Just the name &mdash; not the full URL." },
-  rss:     { label: "Feed URL",            placeholder: "https://www.fda.gov/.../recalls.xml",         hint: "Any RSS or Atom feed." },
-  openfda: { label: "Drug / search term",  placeholder: "e.g. metformin",                              hint: "Searches openFDA's adverse-event reports." },
-  webpage: { label: "Page URL",            placeholder: "https://www.1mg.com/drugs/paracetamol-501",  hint: "Any review / forum page. Stealth fetcher handles selectors." },
-  x_stub:  { label: "Search query",        placeholder: "metformin side effects",                      hint: "Used as the X (Twitter) search term." },
-};
-function refreshHint(row){
-  const conn = row.querySelector('[data-f=connector]').value;
-  const cfg  = DETAIL_HINTS[conn] || DETAIL_HINTS.reddit;
-  row.querySelector('[data-f=detail-label]').textContent = cfg.label;
-  const inp = row.querySelector('[data-f=detail]');
-  inp.placeholder = cfg.placeholder;
-  row.querySelector('[data-f=detail-hint]').innerHTML = cfg.hint;
-}
-function gather(){
-  const rows=[...document.querySelectorAll('#sources-list .src-row')];
-  const arr=rows.map(r=>{
-    const v = r.querySelector('[data-f=detail]').value.trim();
-    let conn = r.querySelector('[data-f=connector]').value;
-    let p = {};
-    if (conn === 'reddit')       p = { subreddit: v.replace(/^r\//,'').replace(/^https?:\/\/(www\.)?reddit\.com\//,''), limit: 50 };
-    else if (conn === 'rss')     p = { url: v };
-    else if (conn === 'openfda') p = { search: v, limit: 200 };
-    else if (conn === 'x_stub')  p = { query: v };
-    else if (conn === 'webpage') {
-      conn = 'html_stealth';
-      p = {
-        url: v,
-        list_selector:  'div.review-item, article, li.comment, div.user-review',
-        title_selector: 'h2, h3, p.review-text, .title',
-        body_selector:  'p, .review-text, .body, .description',
-        link_selector:  'a',
-      };
+(function(){
+  /* ---------------- KEYWORDS ---------------- */
+  const chips = document.getElementById('kw-chips');
+  const kwInput = document.getElementById('kw-input');
+  const kwAdd = document.getElementById('kw-add');
+  const fKw = document.getElementById('f-keywords');
+  let kws = [];
+
+  if (fKw.value && fKw.value.trim()) {
+    fKw.value.split(/[,\n]/).map(s=>s.trim()).filter(Boolean).forEach(k => kws.push(k));
+  }
+  function esc(s){ return s.replace(/[<>&"']/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'}[c])); }
+  function renderKw(){
+    chips.innerHTML = '';
+    chips.classList.toggle('is-empty', kws.length === 0);
+    kws.forEach((k,i) => {
+      const span = document.createElement('span');
+      span.className = 'pc-chip';
+      span.innerHTML = esc(k) + ' <button type="button" aria-label="remove">&times;</button>';
+      span.querySelector('button').onclick = () => { kws.splice(i,1); renderKw(); syncKw(); };
+      chips.appendChild(span);
+    });
+  }
+  function syncKw(){ fKw.value = kws.join(','); }
+  function addKw(){
+    const v = kwInput.value.trim(); if (!v) return;
+    v.split(/[,\n]/).map(s=>s.trim()).filter(Boolean).forEach(t => { if (!kws.includes(t)) kws.push(t); });
+    kwInput.value = ''; renderKw(); syncKw();
+  }
+  kwAdd.onclick = addKw;
+  kwInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); addKw(); }
+    else if (e.key === 'Backspace' && !kwInput.value && kws.length) { kws.pop(); renderKw(); syncKw(); }
+  });
+  renderKw();
+
+  /* ---------------- CADENCE ---------------- */
+  const fCad = document.getElementById('f-cadence');
+  function selectCadence(v){
+    fCad.value = v;
+    document.querySelectorAll('.pc-cad-btn').forEach(b => b.classList.toggle('is-selected', b.dataset.val === v));
+  }
+  document.querySelectorAll('.pc-cad-btn').forEach(b => b.addEventListener('click', () => selectCadence(b.dataset.val)));
+  selectCadence(fCad.value || 'daily');
+
+  /* ---------------- TREND WINDOW ---------------- */
+  const fWin = document.getElementById('f-lookback');
+  function selectWindow(v){
+    fWin.value = v;
+    document.querySelectorAll('.pc-win-btn').forEach(b => b.classList.toggle('is-selected', b.dataset.val === String(v)));
+  }
+  document.querySelectorAll('.pc-win-btn').forEach(b => b.addEventListener('click', () => selectWindow(b.dataset.val)));
+  selectWindow(fWin.value || '30');
+
+  /* ---------------- SOURCES ---------------- */
+  const SRC_DEFS = {
+    reddit:       { label:'Reddit',   detail:'Subreddit name',   placeholder:'india', hint:'Just the name — e.g. <b>india</b> or <b>AskDocs</b>.', namePrefix:'reddit-' },
+    rss:          { label:'RSS',      detail:'Feed URL',         placeholder:'https://www.fda.gov/.../recalls.xml', hint:'Any RSS or Atom feed URL.', namePrefix:'rss-' },
+    openfda:      { label:'openFDA',  detail:'Drug / search term',placeholder:'metformin', hint:'Searches openFDA FAERS adverse-event reports.', namePrefix:'openfda-' },
+    html_stealth: { label:'Webpage',  detail:'Page URL',         placeholder:'https://www.1mg.com/drugs/paracetamol-501', hint:'Any review / forum page. Stealth fetcher handles selectors.', namePrefix:'web-' },
+    x_stub:       { label:'X',        detail:'Search query',     placeholder:'metformin side effects', hint:'Used as the X (Twitter) search term.', namePrefix:'x-' },
+    whatsapp:     { label:'WhatsApp', detail:'Webhook label',    placeholder:'wa-fixture', hint:'Replays Meta Cloud webhook fixtures.', namePrefix:'wa-' },
+  };
+
+  const srcConn   = document.getElementById('src-conn');
+  const srcName   = document.getElementById('src-name');
+  const srcDetail = document.getElementById('src-detail');
+  const srcHint   = document.getElementById('src-hint');
+  const srcList   = document.getElementById('src-list');
+  const srcAddBtn = document.getElementById('src-add');
+  const srcCounter= document.getElementById('src-counter');
+  const fSrc      = document.getElementById('f-sources_json');
+  let sources = [];
+
+  function refreshBuilder(){
+    const def = SRC_DEFS[srcConn.value];
+    srcDetail.placeholder = def.detail + ' — ' + def.placeholder;
+    srcHint.innerHTML = def.hint;
+    if (!srcName.value || srcName.dataset.auto === '1') {
+      srcName.value = def.namePrefix + (srcDetail.value.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,24) || 'source');
+      srcName.dataset.auto = '1';
     }
-    return {
-      name: r.querySelector('[data-f=name]').value.trim(),
-      connector: conn,
-      params: p,
-      latency: 'daily',
-      enabled: r.querySelector('[data-f=enabled]').checked,
-    };
-  }).filter(s => s.connector && s.name);
-  document.getElementById('sources_json').value = JSON.stringify(arr);
-}
-function addSource(){
-  const t = document.getElementById('src-tpl').content.cloneNode(true);
-  const row = t.querySelector('.src-row');
-  row.querySelector('[data-f=remove]').onclick = () => { row.remove(); gather(); };
-  row.querySelector('[data-f=connector]').addEventListener('change', () => refreshHint(row));
-  row.querySelectorAll('input,select').forEach(i => i.addEventListener('input', gather));
-  document.getElementById('sources-list').appendChild(row);
-  refreshHint(row);
-  gather();
-}
-document.getElementById('proj-form').addEventListener('submit', gather);
-addSource();
+  }
+  srcConn.addEventListener('change', refreshBuilder);
+  srcDetail.addEventListener('input', () => {
+    if (srcName.dataset.auto === '1') {
+      const def = SRC_DEFS[srcConn.value];
+      srcName.value = def.namePrefix + (srcDetail.value.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,24) || 'source');
+    }
+  });
+  srcName.addEventListener('input', () => { srcName.dataset.auto = ''; });
+  refreshBuilder();
+
+  function buildParams(conn, detail){
+    const v = (detail || '').trim();
+    if (conn === 'reddit')       return { subreddits: [v.replace(/^r\//,'').replace(/^https?:\/\/(www\.)?reddit\.com\//,'')], limit: 100 };
+    if (conn === 'rss')          return { feed_url: v };
+    if (conn === 'openfda')      return { search: 'patient.drug.medicinalproduct:' + v.toUpperCase().replace(/[^A-Z0-9 ]/g,''), limit: 200, per_page: 100 };
+    if (conn === 'html_stealth') return { url: v,
+                                          list_selector: 'div.review-item, article, li.comment, div.user-review',
+                                          title_selector: 'h2, h3, p.review-text, .title',
+                                          body_selector: 'p, .review-text, .body, .description',
+                                          link_selector: 'a' };
+    if (conn === 'x_stub')       return { query: v };
+    if (conn === 'whatsapp')     return { fixture: v || 'wa-fixture' };
+    return {};
+  }
+
+  function renderSrc(){
+    srcList.innerHTML = '';
+    srcList.classList.toggle('is-empty', sources.length === 0);
+    sources.forEach((s, i) => {
+      const def = SRC_DEFS[s.connector] || {label:s.connector};
+      const item = document.createElement('div');
+      item.className = 'pc-src-item';
+      const detailDisplay = (s.connector==='reddit')      ? (s.params.subreddits||[]).join(', ')
+                          : (s.connector==='rss')         ? s.params.feed_url
+                          : (s.connector==='openfda')     ? s.params.search
+                          : (s.connector==='html_stealth')? s.params.url
+                          : (s.connector==='x_stub')      ? s.params.query
+                          : (s.connector==='whatsapp')    ? s.params.fixture
+                          : '';
+      item.innerHTML = `
+        <span class="badge">${esc(def.label)}</span>
+        <div class="grow">
+          <div class="name">${esc(s.name)}</div>
+          <div class="meta">${esc(detailDisplay || '')}</div>
+        </div>
+        <button type="button" class="rm" aria-label="remove">&times;</button>`;
+      item.querySelector('.rm').onclick = () => { sources.splice(i,1); renderSrc(); syncSrc(); };
+      srcList.appendChild(item);
+    });
+    srcCounter.textContent = sources.length + ' SOURCE' + (sources.length === 1 ? '' : 'S');
+    document.getElementById('submit-btn').disabled = (sources.length === 0 || kws.length === 0);
+  }
+  function syncSrc(){ fSrc.value = JSON.stringify(sources); }
+
+  srcAddBtn.onclick = () => {
+    const conn = srcConn.value;
+    const detail = srcDetail.value.trim();
+    if (!detail) { srcDetail.focus(); return; }
+    const name = (srcName.value.trim() || (SRC_DEFS[conn].namePrefix + 'source-' + (sources.length+1)));
+    sources.push({ name, connector: conn, params: buildParams(conn, detail), enabled: true });
+    srcDetail.value = ''; srcName.value = ''; srcName.dataset.auto = '1';
+    refreshBuilder();
+    renderSrc(); syncSrc();
+  };
+  srcDetail.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); srcAddBtn.click(); } });
+
+  renderSrc();
+
+  /* ---------------- SUBMIT ---------------- */
+  const fName = document.getElementById('f-name');
+  const fId   = document.getElementById('f-project_id');
+
+  function slugify(s){
+    return (s || '').toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g,'')
+      .replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,48) || 'project';
+  }
+
+  document.getElementById('proj-form').addEventListener('submit', (e) => {
+    syncKw(); syncSrc();
+    if (!fId.value) fId.value = slugify(fName.value);
+    if (kws.length === 0) { e.preventDefault(); alert('Add at least one extraction keyword.'); return; }
+    if (sources.length === 0) { e.preventDefault(); alert('Add at least one data source.'); return; }
+  });
+})();
 </script>
 {% endblock %}

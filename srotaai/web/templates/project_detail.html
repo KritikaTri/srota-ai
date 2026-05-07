@@ -75,10 +75,18 @@
 
 {% if tab == 'overview' %}
   {{ ui.pipeline_strip([
-       ('Sources',  counts.sources_active, 'Connectors active', 'blue'),
-       ('Records',  counts.records,        'After dedup & PII', 'indigo'),
-       ('Entities', counts.entities,       'Tagged drug↔event', 'violet'),
-       ('Signals',  counts.flagged,        'Latest run',         'red'),
+       ('Sources',  counts.sources_active,
+        '<svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="white" stroke-width="1.5"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v6c0 1.66 3.58 3 8 3s8-1.34 8-3V6"/><path d="M4 12v6c0 1.66 3.58 3 8 3s8-1.34 8-3v-6"/></svg>',
+        'blue'),
+       ('Records',  counts.records,
+        '<svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="white" stroke-width="1.5"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>',
+        'indigo'),
+       ('Entities', counts.entities,
+        '<svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="white" stroke-width="1.5"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a4 4 0 0 0-8 0v2"/><path d="M8 14h0M12 14h0M16 14h0"/></svg>',
+        'violet'),
+       ('Signals',  counts.flagged,
+        '<svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="white" stroke-width="1.5"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>',
+        'red'),
   ]) }}
 
   <section class="mt-6 bg-white border border-slate-200 rounded-xl shadow-sm">

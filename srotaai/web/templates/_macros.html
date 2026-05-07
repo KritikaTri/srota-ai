@@ -39,18 +39,11 @@
 
 
 {# Active Data Pipeline strip — exact replica of reference app #}
-{# stages = [(label, value, icon_svg, color), ...]   color in: blue|indigo|violet|red #}
 {% macro pipeline_strip(stages) %}
-{%- set GRADS = {
-  'blue':   'linear-gradient(135deg, #60a5fa 0%, #2563eb 100%)',
-  'indigo': 'linear-gradient(135deg, #818cf8 0%, #4f46e5 100%)',
-  'violet': 'linear-gradient(135deg, #c084fc 0%, #7c3aed 100%)',
-  'red':    'linear-gradient(135deg, #f87171 0%, #dc2626 100%)'
-} -%}
-<section class="bg-white border border-slate-200 rounded-xl shadow-sm">
-  <div class="flex items-center justify-between px-6 pt-5 pb-2">
+<section class="bg-white border border-slate-200 rounded-xl shadow-sm p-6">
+  <div class="flex items-center justify-between mb-6">
     <h2 class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-700">Active Data Pipeline</h2>
-    <div class="inline-flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-emerald-600">
+    <div class="inline-flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-emerald-600 whitespace-nowrap">
       <span class="relative flex h-2 w-2">
         <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-75"></span>
         <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
@@ -58,27 +51,39 @@
       Live Processing
     </div>
   </div>
-
-  <div style="display:flex; align-items:flex-start; justify-content:center; gap:0; padding:32px 24px 36px;">
+  {% set ncols = stages|length * 2 - 1 %}
+  <div class="grid items-start gap-x-4" style="grid-template-columns: repeat({{ ncols }}, minmax(0, 1fr));">
+    {# row 1: icons + arrows, all at the same vertical level #}
+    {% set _grad = {
+      'blue':   'linear-gradient(135deg, #60a5fa 0%, #2563eb 100%)',
+      'indigo': 'linear-gradient(135deg, #818cf8 0%, #4f46e5 100%)',
+      'violet': 'linear-gradient(135deg, #a78bfa 0%, #7c3aed 100%)',
+      'red':    'linear-gradient(135deg, #f87171 0%, #dc2626 100%)',
+    } %}
     {% for label, value, icon_svg, color in stages %}
-      {# stage column — fixed compact width so the row stays centered #}
-      <div style="display:flex; flex-direction:column; align-items:center; text-align:center; width:160px;">
-        <div style="width:96px; height:96px; border-radius:22px; display:flex; align-items:center; justify-content:center;
-                    background: {{ GRADS[color] }};
-                    box-shadow: 0 10px 24px -10px rgba(15,23,42,0.35), 0 4px 8px -4px rgba(15,23,42,0.15);">
+      <div class="flex justify-center">
+        <div class="flex items-center justify-center shadow-md"
+             style="width:64px;height:64px;border-radius:16px;background: {{ _grad.get(color, _grad['blue']) }};">
           {{ icon_svg|safe }}
         </div>
-        <div style="margin-top:18px; font-size:11px; font-weight:700; letter-spacing:0.14em; text-transform:uppercase; color:#94a3b8;">{{ label }}</div>
-        <div style="margin-top:6px; font-size:30px; font-weight:700; line-height:1; color:#0f172a; font-variant-numeric: tabular-nums;">{{ value }}</div>
       </div>
       {% if not loop.last %}
-        {# arrow column — centered vertically on the icon square (96px tall) #}
-        <div style="width:48px; display:flex; align-items:center; justify-content:center; height:96px;">
-          <svg width="40" height="12" viewBox="0 0 40 12" fill="none" stroke="#cbd5e1" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M2 6h32M30 2l4 4-4 4"/>
+        <div class="flex items-center justify-center h-16 text-slate-300">
+          <svg width="48" height="16" viewBox="0 0 48 16" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M2 8h40M36 2l6 6-6 6"/>
           </svg>
         </div>
       {% endif %}
+    {% endfor %}
+    {# row 2: labels (only under icons, blank under arrows) #}
+    {% for label, value, icon_svg, color in stages %}
+      <div class="text-center mt-3 text-[10px] font-bold uppercase tracking-wider text-slate-500">{{ label }}</div>
+      {% if not loop.last %}<div></div>{% endif %}
+    {% endfor %}
+    {# row 3: values #}
+    {% for label, value, icon_svg, color in stages %}
+      <div class="text-center mt-1 text-2xl font-bold tabular-nums text-slate-900">{{ value }}</div>
+      {% if not loop.last %}<div></div>{% endif %}
     {% endfor %}
   </div>
 </section>

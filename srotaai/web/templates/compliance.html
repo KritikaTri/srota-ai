@@ -2,75 +2,95 @@
 {% import "_macros.html" as ui %}
 
 {% block content %}
+<style>
+  .cmp-grid    { display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:16px; margin-bottom:24px; }
+  @media (max-width:900px){ .cmp-grid { grid-template-columns:repeat(2, minmax(0,1fr)); } }
+  @media (max-width:540px){ .cmp-grid { grid-template-columns:1fr; } }
 
-<!-- Why this page exists -->
-<section class="mb-6 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-5">
-  <div class="flex items-start gap-3">
-    <div class="flex-none w-9 h-9 rounded-lg bg-blue-600 text-white flex items-center justify-center">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-5 h-5"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-    </div>
-    <div>
-      <h2 class="font-semibold text-slate-900">Why this page exists</h2>
-      <p class="text-sm text-slate-700 mt-1 leading-relaxed">
-        For pharmacovigilance to be defensible to a medical board or regulator, every
-        action that touched a signal must be reconstructible &mdash; <span class="font-medium">who</span>
-        ran a fetch, <span class="font-medium">when</span> a project was created or paused,
-        <span class="font-medium">which</span> connector recorded each adverse event, and
-        <span class="font-medium">what</span> the signal scores looked like at that moment.
-        SrotaAI writes every such event into an append-only, SHA-256 hash-chained log so
-        that any later tampering &mdash; even one byte &mdash; is detectable.
-      </p>
-    </div>
-  </div>
-</section>
+  .cmp-card    { background:#fff; border:1px solid #e2e8f0; border-radius:14px; box-shadow:0 1px 2px rgba(15,23,42,.04); }
+  .cmp-card-head { padding:18px 22px; border-bottom:1px solid #f1f5f9;
+                   display:flex; align-items:center; justify-content:space-between; gap:12px; }
+  .cmp-card-head h2 { margin:0; font-size:15px; font-weight:600; color:#0f172a; }
+  .cmp-card-head p  { margin:2px 0 0 0; font-size:12px; color:#64748b; }
+
+  .cmp-pill    { display:inline-flex; align-items:center; gap:6px; padding:5px 10px;
+                 border-radius:9999px; font-size:11px; font-weight:600; letter-spacing:.04em; }
+  .cmp-pill.ok  { background:#ecfdf5; color:#047857; border:1px solid #a7f3d0; }
+  .cmp-pill.bad { background:#fef2f2; color:#b91c1c; border:1px solid #fecaca; }
+
+  .cmp-table   { width:100%; border-collapse:collapse; font-size:13px; }
+  .cmp-table thead th { font-size:10px; font-weight:600; letter-spacing:.1em; text-transform:uppercase;
+                        color:#64748b; background:#f8fafc; padding:12px 20px; text-align:left; border-bottom:1px solid #e2e8f0; }
+  .cmp-table tbody td { padding:10px 20px; border-top:1px solid #f1f5f9; vertical-align:middle; color:#0f172a; }
+  .cmp-table tbody tr:hover { background:#f8fafc; }
+  .cmp-mono    { font-family:'JetBrains Mono', ui-monospace, monospace; }
+  .cmp-id      { color:#94a3b8; font-size:12px; }
+  .cmp-time    { color:#64748b; font-size:12px; }
+  .cmp-action  { font-weight:500; color:#0f172a; }
+  .cmp-trace   { color:#2563eb; font-size:12px; }
+  .cmp-hash    { color:#94a3b8; font-size:11px; letter-spacing:.02em; }
+
+  .cmp-empty   { padding:60px 24px; text-align:center; color:#94a3b8; font-size:13px; }
+</style>
 
 <!-- KPI strip -->
-<div class="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-6">
+<div class="cmp-grid">
   {{ ui.kpi_card('Audit Events', chain_total, sub_html='Append-only · hash-chained', accent='violet') }}
-  {{ ui.kpi_card('Chain Status', 'OK' if chain_ok else 'BROKEN', sub_html=('All entries verified' if chain_ok else ('Broken at #' ~ chain_broken_at)), accent=('emerald' if chain_ok else 'red')) }}
-  {{ ui.kpi_card('Records Redacted', kpis.redacted, sub_html=(kpis.pii_total_str ~ ' PII hits detected'), accent='blue') }}
+  {{ ui.kpi_card('Chain Status', 'OK' if chain_ok else 'BROKEN',
+       sub_html=('All entries verified' if chain_ok else ('Broken at #' ~ chain_broken_at)),
+       accent=('emerald' if chain_ok else 'red')) }}
+  {{ ui.kpi_card('Records Redacted', kpis.redacted,
+       sub_html=(kpis.pii_total_str ~ ' PII hits detected'), accent='blue') }}
   {{ ui.kpi_card('Encryption', 'AES-256', sub_html='Envelope at rest', accent='indigo') }}
 </div>
 
-<section class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
-  <header class="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+<!-- Audit trail -->
+<section class="cmp-card">
+  <header class="cmp-card-head">
     <div>
-      <h2 class="font-semibold text-slate-900">Audit Trail</h2>
-      <p class="text-xs text-slate-500 mt-0.5">Tamper-evident, hash-chained event log.</p>
+      <h2>Audit Trail</h2>
+      <p>Tamper-evident, hash-chained event log.</p>
     </div>
     {% if chain_ok %}
-      {{ ui.pill('Chain verified · ' ~ chain_total ~ ' events', 'green') }}
+      <span class="cmp-pill ok">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12l5 5L20 7"/></svg>
+        Chain verified · {{ chain_total }} events
+      </span>
     {% else %}
-      {{ ui.pill('Chain broken at #' ~ chain_broken_at, 'red') }}
+      <span class="cmp-pill bad">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 8v5M12 17h.01"/><circle cx="12" cy="12" r="9"/></svg>
+        Chain broken at #{{ chain_broken_at }}
+      </span>
     {% endif %}
   </header>
-  <div class="overflow-x-auto">
-  <table class="w-full text-sm">
-    <thead class="text-[10px] uppercase tracking-wider text-slate-500 bg-slate-50/60">
-      <tr>
-        <th class="px-5 py-3 text-left font-semibold">#</th>
-        <th class="px-5 py-3 text-left font-semibold">Time</th>
-        <th class="px-5 py-3 text-left font-semibold">Action</th>
-        <th class="px-5 py-3 text-left font-semibold">User</th>
-        <th class="px-5 py-3 text-left font-semibold">Trace ID</th>
-        <th class="px-5 py-3 text-left font-semibold">Hash</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for a in audit %}
-      <tr class="border-t border-slate-100 hover:bg-slate-50/60">
-        <td class="px-5 py-2.5 text-slate-400 font-mono text-xs">{{ a.id }}</td>
-        <td class="px-5 py-2.5 font-mono text-xs text-slate-500">{{ a.time_full }}</td>
-        <td class="px-5 py-2.5 font-medium text-slate-900">{{ a.action_label }}</td>
-        <td class="px-5 py-2.5 text-slate-700">{{ a.user }}</td>
-        <td class="px-5 py-2.5 font-mono text-xs text-blue-600">{{ a.trace }}</td>
-        <td class="px-5 py-2.5 font-mono text-[10.5px] text-slate-400">{{ a.hash_short }}</td>
-      </tr>
-      {% else %}
-      <tr><td colspan="6" class="px-5 py-8 text-center text-slate-500">No audit entries yet.</td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
+
+  <div style="overflow-x:auto;">
+    <table class="cmp-table">
+      <thead>
+        <tr>
+          <th style="width:60px;">#</th>
+          <th style="width:170px;">Time</th>
+          <th>Action</th>
+          <th style="width:110px;">User</th>
+          <th style="width:170px;">Trace ID</th>
+          <th style="width:170px;">Hash</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for a in audit %}
+        <tr>
+          <td class="cmp-mono cmp-id">{{ a.id }}</td>
+          <td class="cmp-mono cmp-time">{{ a.time_full }}</td>
+          <td class="cmp-action">{{ a.action_label }}</td>
+          <td>{{ a.user }}</td>
+          <td class="cmp-mono cmp-trace">{{ a.trace }}</td>
+          <td class="cmp-mono cmp-hash">{{ a.hash_short }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" class="cmp-empty">No audit entries yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
   </div>
 </section>
 {% endblock %}
