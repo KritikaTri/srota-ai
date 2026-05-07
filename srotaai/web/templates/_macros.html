@@ -38,51 +38,36 @@
 {% endmacro %}
 
 
-{# Active Data Pipeline strip — exact reference layout #}
+{# Active Data Pipeline strip — reference-app icon layout #}
 {% macro pipeline_strip(stages) %}
-<section class="bg-white border border-slate-200 rounded-xl shadow-sm p-5">
-  <div class="flex items-start justify-between mb-4 gap-3">
-    <div>
-      <h2 class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-700">Active Data Pipeline</h2>
-      <p class="text-xs text-slate-500 mt-0.5">Sources → records → entities → signals. Each stage shows current throughput.</p>
-    </div>
-    <div class="inline-flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 whitespace-nowrap">
-      <span class="relative flex h-1.5 w-1.5">
+<section class="bg-white border border-slate-200 rounded-xl shadow-sm p-6">
+  <div class="flex items-center justify-between mb-6">
+    <h2 class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-700">Active Data Pipeline</h2>
+    <div class="inline-flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-emerald-600 whitespace-nowrap">
+      <span class="relative flex h-2 w-2">
         <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-75"></span>
-        <span class="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
+        <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
       </span>
       Live Processing
     </div>
   </div>
-  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 relative">
-    {% for label, value, sub, color in stages %}
-      <div class="relative">
-        <div class="rounded-lg p-4 border
-          {% if color=='blue'   %}bg-blue-50/70 border-blue-100{% endif %}
-          {% if color=='indigo' %}bg-indigo-50/70 border-indigo-100{% endif %}
-          {% if color=='violet' %}bg-violet-50/70 border-violet-100{% endif %}
-          {% if color=='red'    %}bg-red-50/70 border-red-100{% endif %}">
-          <div class="flex items-center justify-between">
-            <div class="text-[11px] font-bold uppercase tracking-wider
-              {% if color=='blue'   %}text-blue-700{% endif %}
-              {% if color=='indigo' %}text-indigo-700{% endif %}
-              {% if color=='violet' %}text-violet-700{% endif %}
-              {% if color=='red'    %}text-red-700{% endif %}">{{ label }}</div>
-            <div class="w-2 h-2 rounded-full
-              {% if color=='blue'   %}bg-blue-500{% endif %}
-              {% if color=='indigo' %}bg-indigo-500{% endif %}
-              {% if color=='violet' %}bg-violet-500{% endif %}
-              {% if color=='red'    %}bg-red-500{% endif %}"></div>
-          </div>
-          <div class="mt-2 text-3xl font-bold tabular-nums text-slate-900">{{ value }}</div>
-          <div class="mt-1 text-[11px] text-slate-500">{{ sub }}</div>
+  <div class="flex items-center justify-center gap-0 flex-wrap lg:flex-nowrap">
+    {% for label, value, icon_svg, color in stages %}
+      <div class="flex flex-col items-center text-center px-4 min-w-[120px]">
+        {# icon box #}
+        <div class="w-16 h-16 rounded-2xl flex items-center justify-center shadow-md
+          {% if color=='blue'   %}bg-gradient-to-br from-blue-400 to-blue-600{% endif %}
+          {% if color=='indigo' %}bg-gradient-to-br from-indigo-400 to-indigo-600{% endif %}
+          {% if color=='violet' %}bg-gradient-to-br from-violet-400 to-violet-600{% endif %}
+          {% if color=='red'    %}bg-gradient-to-br from-red-400 to-red-600{% endif %}">
+          {{ icon_svg|safe }}
         </div>
-        {% if not loop.last %}
-        <div class="hidden lg:flex absolute top-1/2 -right-3 -translate-y-1/2 z-10 w-6 h-6 rounded-full bg-white border border-slate-200 items-center justify-center text-slate-400 shadow-sm">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 6 6 6-6 6"/></svg>
-        </div>
-        {% endif %}
+        <div class="mt-3 text-[10px] font-bold uppercase tracking-wider text-slate-500">{{ label }}</div>
+        <div class="mt-1 text-2xl font-bold tabular-nums text-slate-900">{{ value }}</div>
       </div>
+      {% if not loop.last %}
+      <div class="hidden lg:flex items-center text-slate-300 text-2xl px-1">→</div>
+      {% endif %}
     {% endfor %}
   </div>
 </section>

@@ -24,78 +24,19 @@
 <!-- ===== Active Data Pipeline ===== -->
 <div class="mt-6">
   {{ ui.pipeline_strip([
-       ('Sources',  kpis.sources,  'Connectors active',  'blue'),
-       ('Records',  kpis.records_str,  'After dedup & PII', 'indigo'),
-       ('Entities', kpis.entities_str, 'Tagged drug↔event', 'violet'),
-       ('Signals',  kpis.new_signals, 'Last 24h flagged',  'red'),
+       ('Sources',  kpis.sources,
+        '<svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.5" class="w-8 h-8"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v6c0 1.66 3.58 3 8 3s8-1.34 8-3V6"/><path d="M4 12v6c0 1.66 3.58 3 8 3s8-1.34 8-3v-6"/></svg>',
+        'blue'),
+       ('Records',  kpis.records_str,
+        '<svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.5" class="w-8 h-8"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>',
+        'indigo'),
+       ('Entities', kpis.entities_str,
+        '<svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.5" class="w-8 h-8"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a4 4 0 0 0-8 0v2"/><path d="M8 14h0M12 14h0M16 14h0"/></svg>',
+        'violet'),
+       ('Signals',  kpis.new_signals,
+        '<svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.5" class="w-8 h-8"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>',
+        'red'),
   ]) }}
-</div>
-
-<!-- ===== Content Intelligence (sentiment / PII / entities) ===== -->
-<div class="mt-6">
-  <section class="bg-white border border-slate-200 rounded-xl shadow-sm p-5">
-    <div class="flex items-start justify-between mb-4 gap-3">
-      <div>
-        <h2 class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-700">Content Intelligence</h2>
-        <p class="text-xs text-slate-500 mt-0.5">
-          Every ingested record is automatically tagged with sentiment (adverse / negative / neutral / positive),
-          scrubbed for PII (phone, Aadhaar, PAN, email, names, addresses), and run through dictionary NER
-          to extract drug ↔ event pairs. These counts show what the NLP layer found across the entire corpus.
-        </p>
-      </div>
-      <span class="text-[10px] font-semibold uppercase tracking-wider text-slate-500 whitespace-nowrap">Per-record NLP enrichment</span>
-    </div>
-    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-      <div class="rounded-lg p-3 border bg-rose-50/70 border-rose-100">
-        <div class="flex items-center justify-between">
-          <div class="text-[10px] font-bold uppercase tracking-wider text-rose-700">Adverse</div>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-3.5 h-3.5 text-rose-500"><path d="M12 9v4M12 17h.01"/><circle cx="12" cy="12" r="9"/></svg>
-        </div>
-        <div class="mt-1 text-2xl font-bold tabular-nums text-slate-900">{{ kpis.sent_adverse }}</div>
-        <div class="text-[10px] text-slate-500">ADR triggers</div>
-      </div>
-      <div class="rounded-lg p-3 border bg-amber-50/70 border-amber-100">
-        <div class="flex items-center justify-between">
-          <div class="text-[10px] font-bold uppercase tracking-wider text-amber-700">Negative</div>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-3.5 h-3.5 text-amber-500"><path d="M16 16s-1.5-2-4-2-4 2-4 2"/><circle cx="9" cy="10" r="1"/><circle cx="15" cy="10" r="1"/><circle cx="12" cy="12" r="9"/></svg>
-        </div>
-        <div class="mt-1 text-2xl font-bold tabular-nums text-slate-900">{{ kpis.sent_negative }}</div>
-        <div class="text-[10px] text-slate-500">Concerning posts</div>
-      </div>
-      <div class="rounded-lg p-3 border bg-emerald-50/70 border-emerald-100">
-        <div class="flex items-center justify-between">
-          <div class="text-[10px] font-bold uppercase tracking-wider text-emerald-700">Positive</div>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-3.5 h-3.5 text-emerald-500"><path d="M8 14s1.5 2 4 2 4-2 4-2"/><circle cx="9" cy="10" r="1"/><circle cx="15" cy="10" r="1"/><circle cx="12" cy="12" r="9"/></svg>
-        </div>
-        <div class="mt-1 text-2xl font-bold tabular-nums text-slate-900">{{ kpis.sent_positive }}</div>
-        <div class="text-[10px] text-slate-500">Reassuring</div>
-      </div>
-      <div class="rounded-lg p-3 border bg-slate-50/70 border-slate-200">
-        <div class="flex items-center justify-between">
-          <div class="text-[10px] font-bold uppercase tracking-wider text-slate-600">Neutral</div>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-3.5 h-3.5 text-slate-400"><path d="M8 14h8"/><circle cx="9" cy="10" r="1"/><circle cx="15" cy="10" r="1"/><circle cx="12" cy="12" r="9"/></svg>
-        </div>
-        <div class="mt-1 text-2xl font-bold tabular-nums text-slate-900">{{ kpis.sent_neutral }}</div>
-        <div class="text-[10px] text-slate-500">No sentiment</div>
-      </div>
-      <div class="rounded-lg p-3 border bg-blue-50/70 border-blue-100">
-        <div class="flex items-center justify-between">
-          <div class="text-[10px] font-bold uppercase tracking-wider text-blue-700">PII Hits</div>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-3.5 h-3.5 text-blue-500"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-        </div>
-        <div class="mt-1 text-2xl font-bold tabular-nums text-slate-900">{{ kpis.pii_total_str }}</div>
-        <div class="text-[10px] text-slate-500">{{ kpis.pii_records }} records flagged</div>
-      </div>
-      <div class="rounded-lg p-3 border bg-violet-50/70 border-violet-100">
-        <div class="flex items-center justify-between">
-          <div class="text-[10px] font-bold uppercase tracking-wider text-violet-700">Entities</div>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-3.5 h-3.5 text-violet-500"><circle cx="6" cy="12" r="2"/><circle cx="18" cy="6" r="2"/><circle cx="18" cy="18" r="2"/><path d="M8 12h7M8 12l8-5M8 12l8 5"/></svg>
-        </div>
-        <div class="mt-1 text-2xl font-bold tabular-nums text-slate-900">{{ kpis.entities_str }}</div>
-        <div class="text-[10px] text-slate-500">Records w/ drug↔event</div>
-      </div>
-    </div>
-  </section>
 </div>
 
 <!-- ===== Two-column: Ingestion Health + Recent Signals ===== -->
