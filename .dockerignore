@@ -1,0 +1,9 @@
+.venv
+__pycache__
+*.pyc
+.git
+server.log
+.server.pid
+archive
+spike_outputs
+node_modules
