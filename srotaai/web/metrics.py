@@ -536,73 +536,100 @@ def signal_detail(store: Store, sig_id: int) -> dict | None:
     event_l = row["event"].lower()
 
     # ---- 2x2 contingency matrix ----------------------------------------
-    # Recompute using the SAME methodology as signals.py so numbers
-    # reconcile with the stored PRR/χ²/IC/n on this signal:
-    #   • pair-level multiplicity (one record may contribute >1 pair)
-    #   • sentiment filter — only adverse/negative records are counted
-    # Universe d-cell counts include records that pass the sentiment filter
-    # but have no drug+event pair (kept tractable by limiting to records
-    # the NER stage actually saw).
-    from srotaai import ner as _ner_mod  # lazy import (avoid circular)
+    # Mirror signals.py._compute() EXACTLY so the numbers reconcile with the
+    # stored PRR/χ²/IC/n that the Triage Hub displays. Methodology:
+    #   1. Iterate adverse/negative records (sentiment filter).
+    #   2. Run NER, collect ALL (drug, event) pairs (multiplicity counted).
+    #   3. Build the 2x2 from the pair-Counter, where N = total pairs.
+    #   4. Haldane–Anscombe correction (+0.5) when any cell is 0.
+    #   5. PRR / χ² / IC derived from the corrected cells.
+    from srotaai import ner as _ner_mod        # lazy (avoid circular)
+    from srotaai import sentiment as _sent_mod
+    from collections import Counter as _Counter
+
     rows = store.conn.execute(
         """SELECT r.id, r.text_redacted, r.sentiment_label
              FROM records r JOIN sources s ON s.id = r.source_id
              WHERE s.project_id = ?""",
         (pid,),
     ).fetchall()
-    a = b = c = d = 0
-    contributing_ids: list[int] = []  # records contributing to the "a" cell
+
+    pairs: list[tuple[str, str]] = []
+    pair_to_record_ids: dict[tuple[str, str], list[int]] = {}
     for r in rows:
         # mirror signals.run() filter: only adverse/negative records count
         slbl = r["sentiment_label"]
         if slbl not in ("adverse", "negative"):
-            d += 1
-            continue
+            # If sentiment_label was never persisted, fall back to runtime
+            # sentiment so old records aren't silently skipped.
+            if slbl in (None, ""):
+                try:
+                    if _sent_mod.analyze(r["text_redacted"] or "").label \
+                            not in ("adverse", "negative"):
+                        continue
+                except Exception:
+                    continue
+            else:
+                continue
         text = r["text_redacted"] or ""
         try:
             ner_res = _ner_mod.extract(text)
         except Exception:
-            d += 1
             continue
-        pairs = ner_res.drug_event_pairs or []
-        if not pairs:
-            d += 1
-            continue
-        contributed = False
-        for (dp, ev) in pairs:
+        for (dp, ev) in (ner_res.drug_event_pairs or []):
             dp_l, ev_l = (dp or "").lower(), (ev or "").lower()
+            if not dp_l or not ev_l:
+                continue
+            pairs.append((dp_l, ev_l))
             if dp_l == drug_l and ev_l == event_l:
-                a += 1
-                contributed = True
-            elif dp_l == drug_l:
-                b += 1
-            elif ev_l == event_l:
-                c += 1
-            else:
-                d += 1
-        if contributed:
-            contributing_ids.append(r["id"])
+                pair_to_record_ids.setdefault((dp_l, ev_l), []).append(r["id"])
+
+    # Same Counter math as signals._compute()
+    drug_event = _Counter(pairs)
+    drug_total = _Counter(d_ for d_, _ in pairs)
+    event_total = _Counter(e_ for _, e_ in pairs)
+    N = len(pairs)
+    a = drug_event.get((drug_l, event_l), 0)
+    b = drug_total.get(drug_l, 0) - a
+    c = event_total.get(event_l, 0) - a
+    d = max(0, N - a - b - c)
+    contributing_ids = list(dict.fromkeys(
+        pair_to_record_ids.get((drug_l, event_l), [])
+    ))
     contingency = {"a": a, "b": b, "c": c, "d": d}
 
-    # ROR + Yates χ² + IC — derived from the same 2x2 so they reconcile.
+    # Haldane–Anscombe correction — same as signals.py
+    a_, b_, c_, d_ = a, b, c, d
+    if 0 in (a_, b_, c_, d_):
+        a_, b_, c_, d_ = a_ + 0.5, b_ + 0.5, c_ + 0.5, d_ + 0.5
+
     def _safe_div(x, y):
         return (x / y) if y else 0.0
-    prr = _safe_div(_safe_div(a, a + b), _safe_div(c, c + d) or 1e-9) if (a + b) and (c + d) else 0.0
-    ror = _safe_div(a * d, b * c) if (b and c) else 0.0
-    n_total = max(a + b + c + d, 1)
-    e_a = (a + b) * (a + c) / n_total
-    yates_chi2 = 0.0
-    for obs, exp in [(a, e_a),
-                     (b, (a + b) * (b + d) / n_total),
-                     (c, (c + d) * (a + c) / n_total),
-                     (d, (c + d) * (b + d) / n_total)]:
-        if exp > 0:
-            yates_chi2 += (max(0.0, abs(obs - exp) - 0.5)) ** 2 / exp
-    # Bayesian Information Component (BCPNN) — simple 2-term version
-    ic = 0.0
-    if a > 0 and (a + b) and (a + c):
-        ic = math.log2((a + 0.5) * n_total / ((a + b) * (a + c) + 1e-9) + 1e-9) \
-             if ((a + b) * (a + c)) else 0.0
+
+    prr = _safe_div(_safe_div(a_, a_ + b_), _safe_div(c_, c_ + d_) or 1e-9)
+    ror = _safe_div(a_ * d_, b_ * c_)
+    expected_a = (a + b) * (a + c) / N if N else 1
+    yates_chi2 = (
+        ((max(0.0, abs(a - expected_a) - 0.5)) ** 2) / expected_a
+        if expected_a else 0.0
+    )
+    ic = math.log2((a + 0.5) / (expected_a + 0.5)) \
+        if (expected_a + 0.5) > 0 else 0.0
+
+    # Trust the stored signal row for the HEADLINE KPIs (PRR, χ², IC, n) so
+    # the Triage Hub and the Investigation Workspace agree byte-for-byte.
+    # The recomputed values above feed the contingency / ROR display.
+    stored_prr  = float(row["prr"])  if row["prr"]  is not None else prr
+    stored_chi2 = float(row["chi2"]) if row["chi2"] is not None else yates_chi2
+    stored_ic   = float(row["ic"])   if row["ic"]   is not None else ic
+    stored_n    = int(row["n"])      if row["n"]    is not None else a
+
+    # Surface stored values to the rest of this function (strength label,
+    # quality warning, etc. all derive from them).
+    prr        = stored_prr
+    yates_chi2 = stored_chi2
+    ic         = stored_ic
+    a          = stored_n  # so "total_mentions" matches Triage Hub n
 
     # ---- Sources involved (which connectors contributed to THIS signal)----
     # Only sources whose records actually contain BOTH the drug AND the event
@@ -816,7 +843,7 @@ def signal_detail(store: Store, sig_id: int) -> dict | None:
     # ---- Confidence (UI score) -----------------------------------------
     quality_warning = None
     has_reddit = any(s == "reddit" for s in sources_involved)
-    if has_reddit and n_total < 200:
+    if has_reddit and N < 200:
         quality_warning = (f'Evidence quality may be impacted by ingestion '
                            f'latency at source "reddit". Statistical weights '
                            f'for current window are marked as ESTIMATED.')
