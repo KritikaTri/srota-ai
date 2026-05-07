@@ -99,9 +99,9 @@ _start() {
         pip install --quiet -r requirements.txt
     fi
 
-    if [[ ! -f srotaai.db ]]; then
-        echo "Seeding signal database (one-time)..."
-        python -m srotaai.signals pv-india-otc --db srotaai.db --min-n 2 >/dev/null 2>&1 || true
+    if [[ ! -f srotaai.db && -f srotaai_seed.db ]]; then
+        echo "Initialising database from seed snapshot..."
+        cp srotaai_seed.db srotaai.db
     fi
 
     nohup python -m uvicorn srotaai.web.app:app \

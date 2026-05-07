@@ -9,8 +9,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy source
 COPY . .
 
-# Seed the signal database at build time
-RUN python -m srotaai.signals pv-india-otc --db srotaai.db --min-n 2
+# Use the committed seed DB as the runtime DB
+RUN cp srotaai_seed.db srotaai.db
 
 ENV PORT=8000
 EXPOSE 8000

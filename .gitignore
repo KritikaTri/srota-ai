@@ -19,6 +19,8 @@ archive/
 *.db
 *.db-wal
 *.db-shm
+# ...except the committed seed snapshot (used by Docker / first-run)
+!srotaai_seed.db
 
 # data/ is gitignored but ship the X demo fixture
 data/*
