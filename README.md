@@ -58,19 +58,6 @@ python -m srotaai.pii eval | python -c "import sys,json; print(json.loads(sys.st
 
 ---
 
-## Web app — what to demo
-
-- **Home** — KPIs, recent activity, top signals
-- **Projects** — list + detail with Overview, Sources, Signals, Configuration tabs
-- **Signal Triage Hub** — tier-coded table with client-side search and tier / min-N filters
-- **Signal detail** — PRR / χ² / IC, tier rationale, contributing records, last-fetched + cadence
-- **Agentic Onboarding** — live agent traces per source with rich payloads
-- **Compliance & Audit** — chain status (`OK` / `BROKEN`), full hash-chained log
-- **Search** — global header search across signals, projects, sources
-- **About** — what / why / how, quick links
-
----
-
 ## Adding a new source
 
 Connectors available: `openfda`, `reddit`, `rss`, `html_stealth` (any URL with CSS selectors), `whatsapp` (Meta Cloud webhook, fixture-driven). Add a block to your project YAML:
