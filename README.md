@@ -1,6 +1,6 @@
 # SrotaAI — Real-Time Pharmacovigilance for India
 
-**Live Website - https://github.com/KritikaTri/srota-ai**
+**Live Website - https://srotaai-509750593944.asia-south1.run.app/**
 **AI for Bharat 2026 · Theme 6 — Real-Time Social Listening for Patient Safety Signals.**
 
 SrotaAI continuously ingests adverse-event signals from openFDA, Reddit, RSS feeds, and patient-review sites; runs PRR / χ² / IC disproportionality math with MHRA thresholds; and surfaces tier-coded signals through a FastAPI dashboard. Every action is recorded in a tamper-evident hash-chained audit log.
