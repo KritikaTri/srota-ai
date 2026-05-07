@@ -16,6 +16,7 @@ from fastapi.responses import (HTMLResponse, RedirectResponse, JSONResponse,
                                 StreamingResponse)
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from starlette.middleware.gzip import GZipMiddleware
 
 from srotaai.project import Project, SourceConfig
 from srotaai.timewindow import TimeWindow
@@ -33,6 +34,9 @@ DB_PATH = ROOT / "srotaai.db"
 PROJECTS_DIR = ROOT / "projects"
 
 app = FastAPI(title="SrotaAI", default_response_class=HTMLResponse)
+# Compress HTML/JSON/CSS responses >1KB. Single biggest perceived-speed win:
+# the /signals page drops from ~380KB to ~30KB on the wire.
+app.add_middleware(GZipMiddleware, minimum_size=1024)
 app.mount("/static", StaticFiles(directory=str(WEB_DIR / "static")),
           name="static")
 templates = Jinja2Templates(directory=str(WEB_DIR / "templates"))
@@ -52,6 +56,10 @@ async def _no_cache_html(request, call_next):
         response.headers["Cache-Control"] = "no-store, must-revalidate"
         response.headers["Pragma"] = "no-cache"
         response.headers["Expires"] = "0"
+    elif request.url.path.startswith("/static/"):
+        # Static assets are cache-busted via ?v=<build_id>, so they can be
+        # cached aggressively by the browser.
+        response.headers["Cache-Control"] = "public, max-age=86400"
     return response
 
 
