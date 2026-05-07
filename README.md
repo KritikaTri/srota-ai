@@ -8,17 +8,69 @@ SrotaAI continuously ingests adverse-event signals from openFDA, Reddit, RSS fee
 
 ## Quick start
 
+**Live demo:** *(deployed link goes here)*
+
+### Run locally
+
+**Requirements:** Python 3.11 or newer, git.
+
+#### Linux / macOS / WSL / Git Bash
+
 ```bash
-./run.sh           # start in background
-./run.sh restart   # restart with latest code
-./run.sh stop      # stop the server
+git clone https://github.com/KritikaTri/srota-ai.git
+cd srota-ai
+./run.sh
 ```
 
-The script activates `.venv/`, starts uvicorn as a daemon (PID in `.server.pid`, logs in `server.log`), and prints the URL — typically `http://<host>:8001`.
+That's it. The script will:
+1. Create a `.venv/` virtual environment
+2. Install dependencies from `requirements.txt`
+3. Seed the SQLite signal database (one-time, ~10 seconds)
+4. Start the server on port 8001
+
+Then open **http://localhost:8001** in any browser.
+
+```bash
+./run.sh stop      # stop the server
+./run.sh restart   # restart with latest code
+tail -f server.log # watch logs
+```
+
+#### Windows (PowerShell or cmd, no WSL)
+
+```powershell
+git clone https://github.com/KritikaTri/srota-ai.git
+cd srota-ai
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements.txt
+python -m srotaai.signals pv-india-otc --db srotaai.db --min-n 2
+python -m uvicorn srotaai.web.app:app --host 0.0.0.0 --port 8001
+```
+
+Then open **http://localhost:8001**.
+
+#### Docker (any OS)
+
+```bash
+git clone https://github.com/KritikaTri/srota-ai.git
+cd srota-ai
+docker build -t srotaai .
+docker run -p 8001:8000 srotaai
+```
+
+Then open **http://localhost:8001**.
+
+### Troubleshooting
+
+| Problem | Fix |
+|---|---|
+| `python3: command not found` | Install Python 3.11+ from [python.org](https://python.org), then re-run |
+| `port 8001 already in use` | `./run.sh stop`, then start again — or set a different port: `PORT=9000 ./run.sh` |
+| `pip install` fails on `lxml` / `cryptography` | Install build tools: Linux `sudo apt install build-essential python3-dev`, macOS `xcode-select --install` |
+| Page is blank / CSS broken | Hard-refresh (Ctrl+Shift+R) — Tailwind cache-buster sometimes needs a kick |
 
 **Health check:** `GET /_ping` returns a zero-CSS heartbeat page.
-
-**Requirements:** Python 3.11+ and `pip install -r requirements.txt`.
 
 ---
 

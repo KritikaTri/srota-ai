@@ -38,7 +38,7 @@
 {% endmacro %}
 
 
-{# Active Data Pipeline strip — reference-app icon layout #}
+{# Active Data Pipeline strip — exact replica of reference app #}
 {% macro pipeline_strip(stages) %}
 <section class="bg-white border border-slate-200 rounded-xl shadow-sm p-6">
   <div class="flex items-center justify-between mb-6">
@@ -51,10 +51,11 @@
       Live Processing
     </div>
   </div>
-  <div class="flex items-center justify-center gap-0 flex-wrap lg:flex-nowrap">
+  {% set ncols = stages|length * 2 - 1 %}
+  <div class="grid items-start gap-x-4" style="grid-template-columns: repeat({{ ncols }}, minmax(0, 1fr));">
+    {# row 1: icons + arrows, all at the same vertical level #}
     {% for label, value, icon_svg, color in stages %}
-      <div class="flex flex-col items-center text-center px-4 min-w-[120px]">
-        {# icon box #}
+      <div class="flex justify-center">
         <div class="w-16 h-16 rounded-2xl flex items-center justify-center shadow-md
           {% if color=='blue'   %}bg-gradient-to-br from-blue-400 to-blue-600{% endif %}
           {% if color=='indigo' %}bg-gradient-to-br from-indigo-400 to-indigo-600{% endif %}
@@ -62,12 +63,24 @@
           {% if color=='red'    %}bg-gradient-to-br from-red-400 to-red-600{% endif %}">
           {{ icon_svg|safe }}
         </div>
-        <div class="mt-3 text-[10px] font-bold uppercase tracking-wider text-slate-500">{{ label }}</div>
-        <div class="mt-1 text-2xl font-bold tabular-nums text-slate-900">{{ value }}</div>
       </div>
       {% if not loop.last %}
-      <div class="hidden lg:flex items-center text-slate-300 text-2xl px-1">→</div>
+        <div class="flex items-center justify-center h-16 text-slate-300">
+          <svg width="48" height="16" viewBox="0 0 48 16" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M2 8h40M36 2l6 6-6 6"/>
+          </svg>
+        </div>
       {% endif %}
+    {% endfor %}
+    {# row 2: labels (only under icons, blank under arrows) #}
+    {% for label, value, icon_svg, color in stages %}
+      <div class="text-center mt-3 text-[10px] font-bold uppercase tracking-wider text-slate-500">{{ label }}</div>
+      {% if not loop.last %}<div></div>{% endif %}
+    {% endfor %}
+    {# row 3: values #}
+    {% for label, value, icon_svg, color in stages %}
+      <div class="text-center mt-1 text-2xl font-bold tabular-nums text-slate-900">{{ value }}</div>
+      {% if not loop.last %}<div></div>{% endif %}
     {% endfor %}
   </div>
 </section>
