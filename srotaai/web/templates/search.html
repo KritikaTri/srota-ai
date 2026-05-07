@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% import "_macros.html" as ui %}
+
+{% block content %}
+
+{% if not q %}
+<section class="bg-white border border-slate-200 rounded-xl shadow-sm p-10 text-center">
+  <div class="text-slate-400 text-5xl mb-3">🔍</div>
+  <h2 class="text-xl font-semibold text-slate-900">Search SrotaAI</h2>
+  <p class="text-slate-500 text-sm mt-2 max-w-lg mx-auto">
+    Type a drug, event, project, or source in the search box at the top of the page and press Enter.
+    Examples: <em>metformin</em>, <em>lactic acidosis</em>, <em>openfda</em>, <em>pv-india-otc</em>.
+  </p>
+</section>
+{% else %}
+
+<header class="mb-6">
+  <h1 class="text-xl font-bold text-slate-900">Search results for "<span class="text-blue-700">{{ q }}</span>"</h1>
+  <p class="text-xs text-slate-500 mt-1">
+    {{ total_hits }} match{% if total_hits != 1 %}es{% endif %}
+    · {{ signals_hits|length }} signal{{ '' if signals_hits|length==1 else 's' }}
+    · {{ projects_hits|length }} project{{ '' if projects_hits|length==1 else 's' }}
+    · {{ sources_hits|length }} source{{ '' if sources_hits|length==1 else 's' }}
+  </p>
+</header>
+
+{% if total_hits == 0 %}
+<section class="bg-white border border-slate-200 rounded-xl shadow-sm p-10 text-center">
+  <h2 class="text-lg font-semibold text-slate-900">No matches</h2>
+  <p class="text-slate-500 text-sm mt-2">Try a different keyword. Searches drug names, event names, project IDs, source names, and connector types.</p>
+</section>
+{% endif %}
+
+{% if signals_hits %}
+<section class="bg-white border border-slate-200 rounded-xl shadow-sm mb-5 overflow-hidden">
+  <header class="px-5 py-3 border-b border-slate-100 flex items-center justify-between">
+    <h2 class="font-semibold text-slate-900 text-sm">Signals <span class="text-slate-400 font-normal">({{ signals_hits|length }})</span></h2>
+    <a href="/signals?q={{ q|urlencode }}" class="text-xs text-blue-600 hover:underline">Open in Triage Hub →</a>
+  </header>
+  <ul class="divide-y divide-slate-100">
+    {% for s in signals_hits %}
+    <li class="px-5 py-3 hover:bg-slate-50/60 cursor-pointer flex items-center gap-4" onclick="location.href='/signals/{{ s.id }}'">
+      <div class="flex-1 min-w-0">
+        <div class="font-semibold text-sm">{{ s.drug }} <span class="text-slate-400">→</span> {{ s.event }}</div>
+        <div class="text-[11px] text-slate-500 font-mono mt-0.5">SIG-{{ s.id }} · n={{ s.n }} · χ²={{ '%.2f'|format(s.chi2 or 0) }}</div>
+      </div>
+      <div class="text-sm tabular-nums font-bold {% if s.prr and s.prr >= 3 %}text-red-600{% elif s.prr and s.prr >= 2 %}text-amber-600{% else %}text-blue-600{% endif %}">
+        PRR {{ '%.2f'|format(s.prr or 0) }}
+      </div>
+    </li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+
+{% if projects_hits %}
+<section class="bg-white border border-slate-200 rounded-xl shadow-sm mb-5 overflow-hidden">
+  <header class="px-5 py-3 border-b border-slate-100 flex items-center justify-between">
+    <h2 class="font-semibold text-slate-900 text-sm">Projects <span class="text-slate-400 font-normal">({{ projects_hits|length }})</span></h2>
+    <a href="/projects" class="text-xs text-blue-600 hover:underline">All projects →</a>
+  </header>
+  <ul class="divide-y divide-slate-100">
+    {% for p in projects_hits %}
+    <li class="px-5 py-3 hover:bg-slate-50/60 cursor-pointer" onclick="location.href='/projects/{{ p.id }}'">
+      <div class="flex items-center gap-3">
+        <span class="font-semibold text-sm text-slate-900">{{ p.name or p.id }}</span>
+        <span class="text-[11px] text-slate-500 font-mono">{{ p.id }}</span>
+        {{ ui.pill((p.status or 'running')|upper, 'green' if p.status=='running' else ('amber' if p.status=='paused' else 'gray')) }}
+      </div>
+      {% if p.description %}<div class="text-xs text-slate-500 mt-0.5 truncate">{{ p.description }}</div>{% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+
+{% if sources_hits %}
+<section class="bg-white border border-slate-200 rounded-xl shadow-sm mb-5 overflow-hidden">
+  <header class="px-5 py-3 border-b border-slate-100 flex items-center justify-between">
+    <h2 class="font-semibold text-slate-900 text-sm">Sources <span class="text-slate-400 font-normal">({{ sources_hits|length }})</span></h2>
+    <a href="/sources" class="text-xs text-blue-600 hover:underline">Acquisition Health →</a>
+  </header>
+  <ul class="divide-y divide-slate-100">
+    {% for src in sources_hits %}
+    <li class="px-5 py-3 hover:bg-slate-50/60 cursor-pointer flex items-center gap-3" onclick="location.href='/projects/{{ src.project_id }}?tab=config'">
+      <span class="font-semibold text-sm text-slate-900">{{ src.name }}</span>
+      <span class="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-200">{{ src.connector }}</span>
+      <span class="text-[11px] text-slate-500 font-mono ml-auto">{{ src.project_id }}</span>
+      {% if src.enabled %}
+        <span class="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">● ENABLED</span>
+      {% else %}
+        <span class="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-slate-100 text-slate-500 border border-slate-200">○ DISABLED</span>
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+
+{% endif %}
+{% endblock %}

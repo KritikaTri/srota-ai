@@ -1,0 +1,296 @@
+{% extends "base.html" %}
+{% import "_macros.html" as ui %}
+
+{% set status = project.status or 'running' %}
+{% set status_color = 'green' if status == 'running' else ('amber' if status == 'paused' else 'gray') %}
+{% set cadence = project.cadence or 'daily' %}
+{% set cadence_label = {'real_time':'Real-time · 5 min','daily':'Daily · 24 h','weekly':'Weekly · 7 d','manual':'Manual only'}.get(cadence, cadence) %}
+
+{% block content %}
+<div class="flex items-end justify-between mb-6 gap-4">
+  <div class="min-w-0">
+    <a href="/projects" class="text-sm text-slate-500 hover:text-slate-700">← All projects</a>
+    <div class="mt-2 flex items-center gap-3 flex-wrap">
+      <h1 class="text-2xl font-bold text-slate-900 tracking-tight truncate max-w-xl">{{ project.name or project.id }}</h1>
+      {{ ui.pill(status|upper, status_color) }}
+    </div>
+    <div class="mt-1 flex items-center gap-3 text-xs text-slate-500 flex-wrap">
+      <span class="font-mono">{{ project.id }}</span>
+      <span>·</span>
+      <span>{{ project.keywords|length }} keyword{{ '' if project.keywords|length==1 else 's' }}</span>
+      <span>·</span>
+      <span>{{ project.sources|length }} source{{ '' if project.sources|length==1 else 's' }}</span>
+      <span>·</span>
+      <span class="inline-flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-blue-500"></span>{{ cadence_label }}</span>
+      <span>·</span>
+      <span>last run {{ counts.last_run[:16] if counts.last_run else 'pending first cycle' }}</span>
+    </div>
+  </div>
+  <div class="flex items-center gap-2 shrink-0">
+    {% if status == 'running' %}
+    <form method="post" action="/projects/{{ project.id }}/pause">
+      <button class="text-sm font-semibold px-3 py-2 rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-100">Pause</button>
+    </form>
+    {% elif status == 'paused' %}
+    <form method="post" action="/projects/{{ project.id }}/resume">
+      <button class="text-sm font-semibold px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white">Resume</button>
+    </form>
+    {% endif %}
+    {% if status != 'closed' %}
+    <form method="post" action="/projects/{{ project.id }}/close" onsubmit="return confirm('Close this project? Scheduler will stop running it. (Records & signals are kept.)')">
+      <button class="text-sm font-semibold px-3 py-2 rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-100">Close</button>
+    </form>
+    {% endif %}
+    <a href="/projects/{{ project.id }}/records.csv" class="inline-flex items-center gap-1.5 bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold px-3.5 py-2 rounded-lg shadow-sm">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 3v12m0 0-4-4m4 4 4-4M5 21h14"/></svg>
+      Download CSV
+    </a>
+    <form method="post" action="/projects/{{ project.id }}/delete" onsubmit="return confirm('Delete this project? Records & signals are kept for audit.')">
+      <button class="text-slate-400 hover:text-red-600 text-sm px-2 py-2">Delete</button>
+    </form>
+  </div>
+</div>
+
+<!-- Counts strip -->
+<div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
+  {{ ui.kpi_card('Records',   counts.records,        sub_html='Stored', accent='violet') }}
+  {{ ui.kpi_card('Entities',  counts.entities,       sub_html='Drug/event tags', accent='indigo') }}
+  {{ ui.kpi_card('Sources',   '%d / %d' % (counts.sources_active, counts.sources_total), sub_html='Active / total', accent='blue') }}
+  {{ ui.kpi_card('Flagged',   counts.flagged,        sub_html='Latest run', accent='red') }}
+  {{ ui.kpi_card('Last Run',  (counts.last_run[5:16] if counts.last_run else '—'),
+       sub_html=cadence_label, accent='emerald') }}
+</div>
+
+<!-- Tabs -->
+<div class="border-b border-slate-200 mb-5">
+  <nav class="flex gap-6 text-sm">
+    {% set tabs = [('overview','Overview'),('signals','Signals'),('entities','Entities'),('sources','Sources'),('config','Configuration')] %}
+    {% for key, label in tabs %}
+    <a href="/projects/{{ project.id }}?tab={{ key }}"
+       class="-mb-px border-b-2 px-1 pb-3 font-medium
+       {% if tab==key %}border-blue-600 text-blue-700{% else %}border-transparent text-slate-500 hover:text-slate-800{% endif %}">{{ label }}</a>
+    {% endfor %}
+  </nav>
+</div>
+
+{% if tab == 'overview' %}
+  {{ ui.pipeline_strip([
+       ('Sources',  counts.sources_active, 'Connectors active', 'blue'),
+       ('Records',  counts.records,        'After dedup & PII', 'indigo'),
+       ('Entities', counts.entities,       'Tagged drug↔event', 'violet'),
+       ('Signals',  counts.flagged,        'Latest run',         'red'),
+  ]) }}
+
+  <section class="mt-6 bg-white border border-slate-200 rounded-xl shadow-sm">
+    <header class="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+      <div>
+        <h2 class="font-semibold text-slate-900">Top Signals</h2>
+        <p class="text-[11px] text-slate-500 mt-0.5">latest run · {{ counts.latest_signals_ts[:16] if counts.latest_signals_ts else 'never' }}</p>
+      </div>
+      {% if signals %}<a href="?tab=signals" class="text-xs text-blue-600 hover:underline">View all {{ signals|length }} →</a>{% endif %}
+    </header>
+    {% if signals %}
+    <ul class="divide-y divide-slate-100">
+      {% for s in signals[:5] %}
+      <li class="px-5 py-3 flex items-center gap-4 hover:bg-slate-50/60 cursor-pointer" onclick="location.href='/signals/{{ s.id }}'">
+        <div class="flex-1 min-w-0">
+          <div class="font-semibold text-sm truncate">{{ s.drug }} <span class="text-slate-400">→</span> {{ s.event }}</div>
+          <div class="text-[11px] text-slate-500 font-mono">PRR {{ s.prr_str }} · χ²={{ s.chi_str }} · n={{ s.n }}</div>
+        </div>
+        <div class="shrink-0">{{ ui.pill(s.conf_label, s.conf_color) }}</div>
+        <div class="shrink-0">{{ ui.pill(s.status[0], s.status[1]) }}</div>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <div class="p-6">{{ ui.empty_state('No signals yet', 'Scheduler will compute disproportionality after first cycle.') }}</div>
+    {% endif %}
+  </section>
+
+{% elif tab == 'sources' %}
+  <section class="bg-white border border-slate-200 rounded-xl shadow-sm">
+    <div class="overflow-x-auto">
+    <table class="w-full text-sm">
+      <thead class="text-[10.5px] uppercase tracking-wider text-slate-500 bg-slate-50/60">
+        <tr>
+          <th class="px-5 py-2.5 text-left">Source</th>
+          <th class="px-5 py-2.5 text-left">Connector</th>
+          <th class="px-5 py-2.5 text-left">Status</th>
+          <th class="px-5 py-2.5 text-left">Last run</th>
+          <th class="px-5 py-2.5 text-right">Fetched</th>
+          <th class="px-5 py-2.5 text-right">Inserted</th>
+          <th class="px-5 py-2.5 text-right">Latency</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for s in sources if s.project_id == project.id %}
+        <tr class="border-t border-slate-100">
+          <td class="px-5 py-3 font-medium">{{ s.name }}</td>
+          <td class="px-5 py-3 font-mono text-xs">{{ s.connector }}</td>
+          <td class="px-5 py-3">{{ ui.pill(s.status, s.status_color) }}</td>
+          <td class="px-5 py-3 text-xs text-slate-500 font-mono">{{ s.last_run_at[:19] if s.last_run_at else '—' }}</td>
+          <td class="px-5 py-3 text-right tabular-nums">{{ s.last_fetched or 0 }}</td>
+          <td class="px-5 py-3 text-right tabular-nums">{{ s.last_inserted or 0 }}</td>
+          <td class="px-5 py-3 text-right tabular-nums">{{ s.latency_ms }}</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="7" class="px-5 py-6 text-center text-slate-500">No sources configured.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+  </section>
+
+{% elif tab == 'signals' %}
+  <section class="bg-white border border-slate-200 rounded-xl shadow-sm">
+    {% if signals %}
+    <div class="overflow-x-auto"><table class="w-full text-sm"><thead class="text-[10.5px] uppercase tracking-wider text-slate-500 bg-slate-50/60"><tr><th class="px-4 py-2.5 text-left">Drug → Event</th><th class="px-4 py-2.5 text-left">Disproportionality</th><th class="px-4 py-2.5 text-left">Confidence</th><th class="px-4 py-2.5 text-left">First detected</th><th class="px-4 py-2.5 text-left">Status</th></tr></thead><tbody>
+    {% for s in signals %}<tr class="border-t border-slate-100 hover:bg-slate-50/60 cursor-pointer" onclick="location.href='/signals/{{ s.id }}'"><td class="px-4 py-3"><div class="font-semibold">{{ s.drug }} → {{ s.event }}</div><div class="text-[11px] text-slate-500 font-mono">{{ s.sig_id }}</div></td><td class="px-4 py-3"><span class="font-bold tabular-nums {% if s.prr_color=='red' %}text-red-600{% elif s.prr_color=='amber' %}text-amber-600{% else %}text-blue-600{% endif %}">{{ s.prr_str }}</span><div class="text-[11px] font-mono text-slate-500">n={{ s.n }} · χ²={{ s.chi_str }}</div></td><td class="px-4 py-3">{{ ui.pill(s.conf_label, s.conf_color) }}</td><td class="px-4 py-3 text-xs font-mono">{{ s.first_detected }}</td><td class="px-4 py-3">{{ ui.pill(s.status[0], s.status[1]) }}</td></tr>{% endfor %}
+    </tbody></table></div>
+    {% else %}<div class="p-6">{{ ui.empty_state('No signals computed yet') }}</div>{% endif %}
+  </section>
+
+{% elif tab == 'entities' %}
+  <section class="bg-white border border-slate-200 rounded-xl shadow-sm">
+    <header class="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+      <div>
+        <h2 class="font-semibold text-slate-900">Extracted Entities</h2>
+        <p class="text-[11px] text-slate-500 mt-0.5">NER tags aggregated across all ingested records · {{ entities|length }} distinct</p>
+      </div>
+    </header>
+    {% if entities %}
+    <div class="overflow-x-auto">
+    <table class="w-full text-sm">
+      <thead class="text-[10.5px] uppercase tracking-wider text-slate-500 bg-slate-50/60">
+        <tr>
+          <th class="px-5 py-2.5 text-left">Type</th>
+          <th class="px-5 py-2.5 text-left">Entity</th>
+          <th class="px-5 py-2.5 text-right">Mentions</th>
+          <th class="px-5 py-2.5 text-right">Records</th>
+          <th class="px-5 py-2.5 text-left">Last seen</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for e in entities %}
+        <tr class="border-t border-slate-100 hover:bg-slate-50/60">
+          <td class="px-5 py-3">
+            {% if e.type == 'DRUG' %}{{ ui.pill('Drug', 'blue') }}
+            {% elif e.type == 'ADR_EVENT' %}{{ ui.pill('ADR Event', 'red') }}
+            {% elif e.type == 'SYMPTOM' %}{{ ui.pill('Symptom', 'amber') }}
+            {% else %}{{ ui.pill(e.type|title, 'gray') }}{% endif %}
+          </td>
+          <td class="px-5 py-3 font-medium">{{ e.name }}</td>
+          <td class="px-5 py-3 text-right tabular-nums font-semibold">{{ e.mentions }}</td>
+          <td class="px-5 py-3 text-right tabular-nums text-slate-600">{{ e.records }}</td>
+          <td class="px-5 py-3 text-xs text-slate-500 font-mono">{{ e.last_seen[:16] if e.last_seen else '—' }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+    {% else %}
+    <div class="p-6">{{ ui.empty_state('No entities extracted yet', 'NER runs after each ingest cycle. Trigger a run or wait for the scheduler.') }}</div>
+    {% endif %}
+  </section>
+{% elif tab == 'config' %}
+  <section class="bg-white border border-slate-200 rounded-xl shadow-sm">
+    <header class="px-5 py-4 border-b border-slate-100">
+      <div class="flex items-center justify-between">
+        <div>
+          <h2 class="font-semibold text-slate-900">Project Configuration</h2>
+          <p class="text-[11px] text-slate-500 mt-0.5">Read-only snapshot of the form values used to create this project. Configuration is immutable for audit traceability — to change settings, archive this project and create a new one.</p>
+        </div>
+        <span class="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200">ⓘ Read-only</span>
+      </div>
+    </header>
+
+    <div class="p-5 grid grid-cols-1 md:grid-cols-2 gap-5">
+      <!-- Identity -->
+      <div class="space-y-3">
+        <h3 class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Identity</h3>
+        <dl class="text-sm divide-y divide-slate-100 border border-slate-200 rounded-lg overflow-hidden">
+          <div class="flex px-3 py-2.5 bg-slate-50/40"><dt class="w-32 text-slate-500">Project ID</dt><dd class="flex-1 font-mono text-slate-900">{{ project.id }}</dd></div>
+          <div class="flex px-3 py-2.5"><dt class="w-32 text-slate-500">Name</dt><dd class="flex-1 font-medium text-slate-900">{{ project.name or '—' }}</dd></div>
+          <div class="flex px-3 py-2.5 bg-slate-50/40"><dt class="w-32 text-slate-500">Description</dt><dd class="flex-1 text-slate-700">{{ project.description or '—' }}</dd></div>
+          <div class="flex px-3 py-2.5"><dt class="w-32 text-slate-500">Status</dt><dd class="flex-1">{{ ui.pill((project.status or 'running')|upper, status_color) }}</dd></div>
+          <div class="flex px-3 py-2.5 bg-slate-50/40"><dt class="w-32 text-slate-500">Cadence</dt><dd class="flex-1 text-slate-900">{{ cadence_label }}</dd></div>
+          <div class="flex px-3 py-2.5"><dt class="w-32 text-slate-500">Created</dt><dd class="flex-1 font-mono text-xs text-slate-700">{{ project.created_at[:19] if project.created_at else '—' }}</dd></div>
+          <div class="flex px-3 py-2.5 bg-slate-50/40"><dt class="w-32 text-slate-500">Updated</dt><dd class="flex-1 font-mono text-xs text-slate-700">{{ project.updated_at[:19] if project.updated_at else '—' }}</dd></div>
+        </dl>
+      </div>
+
+      <!-- Time window -->
+      <div class="space-y-3">
+        <h3 class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Default Time Window</h3>
+        <dl class="text-sm divide-y divide-slate-100 border border-slate-200 rounded-lg overflow-hidden">
+          {% set tw = project.time_window or {} %}
+          <div class="flex px-3 py-2.5 bg-slate-50/40"><dt class="w-32 text-slate-500">Lookback days</dt><dd class="flex-1 font-mono text-slate-900">{{ tw.lookback_days if tw.lookback_days is defined else '—' }}</dd></div>
+          <div class="flex px-3 py-2.5"><dt class="w-32 text-slate-500">Since</dt><dd class="flex-1 font-mono text-xs text-slate-700">{{ tw.since or '—' }}</dd></div>
+          <div class="flex px-3 py-2.5 bg-slate-50/40"><dt class="w-32 text-slate-500">Until</dt><dd class="flex-1 font-mono text-xs text-slate-700">{{ tw.until or '—' }}</dd></div>
+        </dl>
+      </div>
+    </div>
+
+    <!-- Keywords -->
+    <div class="px-5 pb-5">
+      <h3 class="text-[11px] font-semibold uppercase tracking-wider text-slate-500 mb-2">Keywords <span class="text-slate-400 normal-case font-normal">({{ project.keywords|length }})</span></h3>
+      {% if project.keywords %}
+      <div class="flex flex-wrap gap-2">
+        {% for kw in project.keywords %}
+        <span class="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full bg-blue-50 text-blue-800 border border-blue-200 font-medium">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 12V8a2 2 0 0 0-2-2h-4l-2-2H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h6"/><circle cx="17" cy="17" r="3"/><path d="m21 21-1.5-1.5"/></svg>
+          {{ kw }}
+        </span>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p class="text-sm text-slate-500">No keywords configured.</p>
+      {% endif %}
+    </div>
+
+    <!-- Sources -->
+    <div class="px-5 pb-5">
+      <h3 class="text-[11px] font-semibold uppercase tracking-wider text-slate-500 mb-2">Sources <span class="text-slate-400 normal-case font-normal">({{ project.sources|length }})</span></h3>
+      {% if project.sources %}
+      <div class="space-y-2">
+        {% for src in project.sources %}
+        <div class="border border-slate-200 rounded-lg overflow-hidden">
+          <div class="flex items-center gap-3 px-4 py-2.5 bg-slate-50/60 border-b border-slate-200">
+            <span class="font-semibold text-sm text-slate-900">{{ src.name }}</span>
+            <span class="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-200">{{ src.connector }}</span>
+            {% if src.latency %}<span class="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200">↻ {{ src.latency|replace('_','-') }}</span>{% endif %}
+            {% if src.enabled %}
+              <span class="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 ml-auto">● Enabled</span>
+            {% else %}
+              <span class="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-slate-100 text-slate-500 border border-slate-200 ml-auto">○ Disabled</span>
+            {% endif %}
+          </div>
+          <div class="px-4 py-3 grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2 text-xs">
+            {% if src.params %}
+            <div class="md:col-span-2">
+              <div class="text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-1">Parameters</div>
+              <pre class="font-mono text-[11px] bg-slate-50 border border-slate-200 rounded p-2 overflow-x-auto whitespace-pre-wrap break-all text-slate-800">{{ src.params|tojson(indent=2) }}</pre>
+            </div>
+            {% endif %}
+            {% if src.time_window %}
+            <div class="md:col-span-2">
+              <div class="text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-1">Time Window (override)</div>
+              <pre class="font-mono text-[11px] bg-slate-50 border border-slate-200 rounded p-2 overflow-x-auto whitespace-pre-wrap text-slate-800">{{ src.time_window|tojson(indent=2) }}</pre>
+            </div>
+            {% endif %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p class="text-sm text-slate-500">No sources configured.</p>
+      {% endif %}
+    </div>
+
+    <div class="px-5 py-3 border-t border-slate-100 bg-slate-50/40 flex items-center gap-3 text-[11px] text-slate-500">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
+      <span>Configuration is intentionally not editable. In a regulated PV environment, retroactively changing keywords or sources would invalidate audit lineage. Archive &amp; recreate to change settings.</span>
+    </div>
+  </section>
+{% endif %}
+{% endblock %}

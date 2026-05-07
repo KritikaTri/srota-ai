@@ -1,0 +1,204 @@
+{% extends "base.html" %}
+{% import "_macros.html" as ui %}
+
+{% block content %}
+
+<!-- ===== KPI strip ===== -->
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+  {{ ui.kpi_card('Total Projects', kpis.projects,
+       sub_html='<span class="text-slate-500">since last month</span>',
+       accent='blue',
+       delta=kpis.projects_delta_str,
+       delta_dir=kpis.projects_delta_dir) }}
+  {{ ui.kpi_card('Active Sources', kpis.sources,
+       sub_html='<span class="font-semibold text-emerald-600">' ~ kpis.uptime_str ~ '</span> uptime',
+       accent='emerald') }}
+  {{ ui.kpi_card('Stale Sources', kpis.stale,
+       sub_html='Last run >24h ago',
+       accent='amber') }}
+  {{ ui.kpi_card('New Signals', kpis.new_signals,
+       sub_html='Last 24 hours',
+       accent='amber') }}
+</div>
+
+<!-- ===== Active Data Pipeline ===== -->
+<div class="mt-6">
+  {{ ui.pipeline_strip([
+       ('Sources',  kpis.sources,  'Connectors active',  'blue'),
+       ('Records',  kpis.records_str,  'After dedup & PII', 'indigo'),
+       ('Entities', kpis.entities_str, 'Tagged drug↔event', 'violet'),
+       ('Signals',  kpis.new_signals, 'Last 24h flagged',  'red'),
+  ]) }}
+</div>
+
+<!-- ===== Content Intelligence (sentiment / PII / entities) ===== -->
+<div class="mt-6">
+  <section class="bg-white border border-slate-200 rounded-xl shadow-sm p-5">
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-700">Content Intelligence</h2>
+      <span class="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Per-record NLP enrichment</span>
+    </div>
+    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+      <div class="rounded-lg p-3 border bg-rose-50/70 border-rose-100">
+        <div class="text-[10px] font-bold uppercase tracking-wider text-rose-700">Adverse</div>
+        <div class="mt-1 text-2xl font-bold tabular-nums text-slate-900">{{ kpis.sent_adverse }}</div>
+        <div class="text-[10px] text-slate-500">ADR triggers</div>
+      </div>
+      <div class="rounded-lg p-3 border bg-amber-50/70 border-amber-100">
+        <div class="text-[10px] font-bold uppercase tracking-wider text-amber-700">Negative</div>
+        <div class="mt-1 text-2xl font-bold tabular-nums text-slate-900">{{ kpis.sent_negative }}</div>
+        <div class="text-[10px] text-slate-500">Concerning posts</div>
+      </div>
+      <div class="rounded-lg p-3 border bg-emerald-50/70 border-emerald-100">
+        <div class="text-[10px] font-bold uppercase tracking-wider text-emerald-700">Positive</div>
+        <div class="mt-1 text-2xl font-bold tabular-nums text-slate-900">{{ kpis.sent_positive }}</div>
+        <div class="text-[10px] text-slate-500">Reassuring</div>
+      </div>
+      <div class="rounded-lg p-3 border bg-slate-50/70 border-slate-200">
+        <div class="text-[10px] font-bold uppercase tracking-wider text-slate-600">Neutral</div>
+        <div class="mt-1 text-2xl font-bold tabular-nums text-slate-900">{{ kpis.sent_neutral }}</div>
+        <div class="text-[10px] text-slate-500">No sentiment</div>
+      </div>
+      <div class="rounded-lg p-3 border bg-blue-50/70 border-blue-100">
+        <div class="text-[10px] font-bold uppercase tracking-wider text-blue-700">PII Hits</div>
+        <div class="mt-1 text-2xl font-bold tabular-nums text-slate-900">{{ kpis.pii_total_str }}</div>
+        <div class="text-[10px] text-slate-500">{{ kpis.pii_records }} records flagged</div>
+      </div>
+      <div class="rounded-lg p-3 border bg-violet-50/70 border-violet-100">
+        <div class="text-[10px] font-bold uppercase tracking-wider text-violet-700">Entities</div>
+        <div class="mt-1 text-2xl font-bold tabular-nums text-slate-900">{{ kpis.entities_str }}</div>
+        <div class="text-[10px] text-slate-500">Records w/ drug↔event</div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<!-- ===== Two-column: Ingestion Health + Recent Safety Signals ===== -->
+<div class="mt-6 grid grid-cols-1 xl:grid-cols-5 gap-6">
+
+  <!-- Ingestion Health -->
+  <section class="xl:col-span-3 bg-white border border-slate-200 rounded-xl shadow-sm">
+    <header class="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+      <h2 class="font-semibold text-slate-900">Ingestion Health by Source</h2>
+      <a href="/sources" class="text-xs font-semibold uppercase tracking-wider text-blue-600 hover:text-blue-700">View All →</a>
+    </header>
+    {% if health %}
+    <div class="overflow-x-auto">
+    <table class="w-full text-sm">
+      <thead class="text-[10px] uppercase tracking-wider text-slate-500 bg-slate-50/60">
+        <tr>
+          <th class="px-5 py-2.5 text-left font-semibold">Source</th>
+          <th class="px-5 py-2.5 text-left font-semibold">Project</th>
+          <th class="px-5 py-2.5 text-left font-semibold">Type</th>
+          <th class="px-5 py-2.5 text-right font-semibold">Latency</th>
+          <th class="px-5 py-2.5 text-left font-semibold">Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for h in health %}
+        <tr class="border-t border-slate-100 hover:bg-slate-50/60">
+          <td class="px-5 py-3 font-mono text-xs text-slate-900">{{ h.identifier }}</td>
+          <td class="px-5 py-3 text-slate-700">{{ h.project_label }}</td>
+          <td class="px-5 py-3">{{ ui.pill(h.type_label, 'gray') }}</td>
+          <td class="px-5 py-3 text-right tabular-nums font-mono text-xs text-slate-700">{{ h.latency_ms }}</td>
+          <td class="px-5 py-3">{{ ui.pill(h.status, h.status_color) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    </div>
+    {% else %}
+    <div class="p-6">{{ ui.empty_state('No sources yet', 'Add a connector to start ingestion.') }}</div>
+    {% endif %}
+  </section>
+
+  <!-- Recent Safety Signals -->
+  <section class="xl:col-span-2 bg-white border border-slate-200 rounded-xl shadow-sm">
+    <header class="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+      <h2 class="font-semibold text-slate-900">Recent Safety Signals</h2>
+      <a href="/signals" class="text-xs font-semibold uppercase tracking-wider text-blue-600 hover:text-blue-700">Triage Hub →</a>
+    </header>
+    {% if recent %}
+    <ul class="divide-y divide-slate-100">
+      {% for s in recent %}
+      <li class="px-5 py-4">
+        <div class="flex items-center gap-2 mb-1.5">
+          {{ ui.pill(s.kicker, s.kicker_color) }}
+          {% if s.is_new %}{{ ui.pill('NEW', 'red') }}{% endif %}
+        </div>
+        <div class="font-semibold text-slate-900 text-sm leading-snug">{{ s.title }}</div>
+        <div class="mt-1 text-xs text-slate-500">{{ s.subtitle|safe }}</div>
+        <div class="mt-2 flex items-center justify-between text-[11px]">
+          <a href="/signals" class="font-semibold uppercase tracking-wider text-blue-600 hover:text-blue-700">{{ s.action_label }}</a>
+          <span class="text-slate-400 font-mono">{{ s.ago }}</span>
+        </div>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <div class="p-6">{{ ui.empty_state('No signals yet', 'Run a project to compute disproportionality.') }}</div>
+    {% endif %}
+  </section>
+</div>
+
+<!-- ===== Agentic Onboarding Activity ===== -->
+<section class="mt-6 bg-ink text-slate-200 border border-slate-800 rounded-xl shadow-sm overflow-hidden">
+  <header class="px-5 py-3 border-b border-slate-800 flex items-center justify-between">
+    <div class="flex items-center gap-2">
+      <span class="relative flex h-2 w-2">
+        <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+        <span class="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
+      </span>
+      <h2 class="font-semibold text-white text-sm">Agentic Onboarding Activity</h2>
+    </div>
+    <span class="text-[10px] font-mono text-slate-400 uppercase tracking-wider">connector-genesis · live</span>
+  </header>
+  <div class="px-5 py-4 font-mono text-[12.5px] leading-relaxed space-y-1.5 max-h-64 overflow-y-auto">
+    {% for line in agent_log %}
+      <div class="flex gap-3">
+        <span class="text-slate-500 shrink-0">[{{ line.ts }}]</span>
+        <span class="
+          {% if line.level=='success' %}text-emerald-300{% endif %}
+          {% if line.level=='ready'   %}text-blue-300 font-semibold{% endif %}
+          {% if line.level=='warn'    %}text-amber-300{% endif %}
+          {% if line.level=='info'    %}text-slate-200{% endif %}
+          {% if line.level=='muted'   %}text-slate-500{% endif %}
+        ">{{ line.text }}</span>
+      </div>
+    {% else %}
+      <div class="text-slate-500">No agent activity recorded.</div>
+    {% endfor %}
+  </div>
+</section>
+
+<!-- ===== Compliance & Audit Trace ===== -->
+<section class="mt-6 bg-white border border-slate-200 rounded-xl shadow-sm">
+  <header class="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+    <h2 class="font-semibold text-slate-900">Compliance & Audit Trace</h2>
+    <a href="/compliance" class="text-xs font-semibold uppercase tracking-wider text-blue-600 hover:text-blue-700">Verify Chain →</a>
+  </header>
+  <table class="w-full text-sm">
+    <thead class="text-[10px] uppercase tracking-wider text-slate-500 bg-slate-50/60">
+      <tr>
+        <th class="px-5 py-2.5 text-left font-semibold">Time</th>
+        <th class="px-5 py-2.5 text-left font-semibold">Action</th>
+        <th class="px-5 py-2.5 text-left font-semibold">User</th>
+        <th class="px-5 py-2.5 text-left font-semibold">Trace ID</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for a in audit %}
+      <tr class="border-t border-slate-100 hover:bg-slate-50/60">
+        <td class="px-5 py-2.5 font-mono text-xs text-slate-500">{{ a.time }}</td>
+        <td class="px-5 py-2.5 font-medium text-slate-900">{{ a.action }}</td>
+        <td class="px-5 py-2.5 text-slate-700">{{ a.user }}</td>
+        <td class="px-5 py-2.5 font-mono text-xs text-blue-600">{{ a.trace }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="4" class="px-5 py-6 text-center text-slate-500">No audit events yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+{% endblock %}

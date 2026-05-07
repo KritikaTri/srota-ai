@@ -1,0 +1,26 @@
+# Spike-only dependencies. Throwaway.
+requests>=2.31
+feedparser>=6.0
+pandas>=2.2
+beautifulsoup4>=4.12
+lxml>=5.0
+python-dateutil>=2.9
+# Spike 1
+praw>=7.7
+# Spike 2 (agent) — uses OpenAI-compatible endpoint
+openai>=1.30
+# Spike 4 (NER) — install lazily; spaCy + scispaCy is heavy
+# pip install spacy && python -m spacy download en_core_web_sm
+
+# Phase 2 (prototype)
+pyyaml>=6.0
+fpdf2>=2.7
+markdown>=3.5
+pypdf>=4.0
+faker>=24.0
+streamlit>=1.40
+altair>=5.0
+apscheduler>=3.10
+# Optional retry-ladder rungs:
+# curl_cffi>=0.7        # TLS-impersonation fetcher
+# playwright>=1.45      # full headless browser; needs `playwright install chromium`

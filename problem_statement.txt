@@ -1,0 +1,74 @@
+Real-Time Social Listening for Patient Experience & Safety Signals
+The Problem 
+Healthcare insights are increasingly available through patient-generated data on social media, forums, and online platforms. These sources provide early signals of adverse events, treatment dissatisfaction, and quality-of-life impacts that are often not captured in traditional systems. 
+Historically, though, these insights have been difficult to acquire due to a lack of systems that effectively listen to or index the right sources on the internet. 
+What to Build
+Build a solution that identifies mentions or references made to a set of keywords, from multiple sources, at varying degrees of intervals, and can run analysis on the data acquired. Core Requirements:
+There are two parts to this problem 
+Part 1: Build a generic engine that can then be leveraged to 
+Build Social monitoring projects – a project would be where all the information related to a use case.
+Each project would allow configuration of keywords that need to be monitored, eg: drugs, symptoms, and conditions.
+Additionally, the user can also configure the sources (X, Reddit, communities, forums) where these keywords need to be monitored.
+Each source will have a crawler/data acquisition engine that acquires and extracts the data for further processing.
+Each source defined in a project should also allow for the configuration of latency metrics
+Real-time,
+Daily
+Weekly
+A UI to set up and configure these projects
+New engine types for sources (data sources) can also be set up or configured via this admin tool. 
+Part 2: Analysis 
+Identify entities, extract entities, and extract individual sentiment from the individual content pieces acquired as part of the feed.
+Extract overall sentiment and trending from a source (for a defined period of time)
+Highlight any safety issues or any adverse issues reported
+Show trending of detected signals in a timeline view.
+Incorporate explainability, traceability, and confidence scores when building these models.
+Flag and PII or PHI that may have been accidentally reported in the acquired data.
+Scope
+In  
+Support multiple sources/engines for acquiring data
+Processing pipelines
+Storage of acquired data/signals
+Ability to run models, reporting, and analysis against the data acquired.
+Dashboard, Administration, and reporting UI.
+Major sources: X, Reddit, Quora, online communities that fit a forum structure.
+Out
+Data retention
+Cost projections 
+Tech Stack
+Open to the choices made by the team. Ideally lean towards python.
+Modularity, extensibility and configurability will be key
+Evaluation Criteria
+Ideas on building engines to acquire data (40%)
+Approaches for data acquisition from multiple sources
+Extensibility (ease of adding new websites for scraping/searching keywords)
+Reliability of sourcing data
+Execution on above ideas (30%)
+Clarity of design
+Architecture
+Working demo
+Presentation and UX (15%)
+Overall presentation, UX, and dashboard design
+How well key differentiators are highlighted compared to existing solutions
+Uniqueness (15%)
+Innovative application of agentic and AI capabilities, especially for onboarding new data sources/websites
+Deliverables
+Working Demo – Ideally Live
+Pitch Deck
+Architecture
+Repository Link
+Readme for setup and details of executing code
+Walkthrough of the solution
+Bonus
+Application of Agentic approaches
+Constraints
+All code written for the purposes of the hackathon
+Ownership assignment to the sponsor for IP 
+What we provide 
+Limited credits for https://twitterapi.io
+Mentors
+Ideas
+X ingestion using https://twitterapi.io
+Adjacent solutions:
+https://github.com/Kuew/social-media-monitoring-open-source
+ 
+ 

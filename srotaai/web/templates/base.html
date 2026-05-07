@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>{{ page_title or "System Overview" }} · SrotaAI</title>
+
+<link rel="stylesheet" href="/static/tailwind.css?v={{ build_id|default('1') }}" />
+<style>
+  body{font-family:Inter,ui-sans-serif,system-ui,sans-serif}
+  .font-mono,code,pre{font-family:"JetBrains Mono",ui-monospace,monospace}
+  /* Failsafe layout (works even if Tailwind classes are missing) */
+  html, body { margin: 0; padding: 0; }
+  body { min-height: 100vh; background: #f8fafc; color: #0f172a; }
+  #sidebar { position: fixed; top: 0; left: 0; width: 260px; height: 100vh; z-index: 40; }
+  #main    { margin-left: 260px; min-height: 100vh; }
+</style>
+
+<link rel="stylesheet" href="/static/app.css?v={{ build_id|default('1') }}" />
+</head>
+<body class="bg-paper text-slate-900 font-sans antialiased">
+
+<div id="app-shell" data-collapsed="false">
+
+  <!-- ===================== SIDEBAR (fixed; pinned to viewport) ===================== -->
+  <aside id="sidebar"
+         class="bg-ink text-slate-200 flex flex-col fixed top-0 left-0 h-screen z-40 transition-[width] duration-200"
+         style="width: 260px;">
+
+    <div class="px-4 py-4 border-b border-slate-800">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 grid place-items-center font-bold shrink-0 text-white">S</div>
+        <div class="sb-label">
+          <div class="text-sm font-semibold leading-tight">SrotaAI</div>
+          <div class="text-[10px] text-slate-400 leading-tight font-mono">v1.2.4-stable</div>
+        </div>
+      </div>
+    </div>
+
+    <nav class="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+      {% set nav = [
+        ('overview',   '/',           'System Overview',     'home'),
+        ('signals',    '/signals',    'Triage Hub',          'shield'),
+        ('projects',   '/projects',   'Projects',            'folder'),
+        ('sources',    '/sources',    'Acquisition Health',  'plug'),
+        ('compliance', '/compliance', 'Compliance & Audit',  'lock'),
+        ('about',      '/about',      'About SrotaAI',       'info'),
+      ] %}
+      {% for key, href, label, icon in nav %}
+      <a href="{{ href }}" title="{{ label }}"
+         class="sb-item flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm
+         {% if active==key %}bg-slate-800 text-white{% else %}text-slate-300 hover:bg-slate-800/60 hover:text-white{% endif %}">
+        <span class="shrink-0 w-5 h-5 grid place-items-center">
+          {% if icon=='home' %}<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12 12 4l9 8"/><path d="M5 10v10h14V10"/></svg>{% endif %}
+          {% if icon=='shield' %}<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3 4 6v6c0 5 3.5 8.5 8 9 4.5-.5 8-4 8-9V6z"/></svg>{% endif %}
+          {% if icon=='folder' %}<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>{% endif %}
+          {% if icon=='plug' %}<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 7V3m6 4V3M7 11h10v3a5 5 0 0 1-10 0z M12 19v3"/></svg>{% endif %}
+          {% if icon=='lock' %}<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="11" width="16" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>{% endif %}
+          {% if icon=='info' %}<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>{% endif %}
+        </span>
+        <span class="sb-label flex-1 truncate">{{ label }}</span>
+      </a>
+      {% endfor %}
+    </nav>
+
+    <div class="px-3 py-3 border-t border-slate-800 space-y-2">
+      <div class="sb-label flex items-center gap-2 px-2 text-xs text-slate-400">
+        <span class="relative flex h-2 w-2 shrink-0">
+          <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+          <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+        </span>
+        <span>System Healthy</span>
+      </div>
+      <button id="sb-toggle" class="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-slate-400 hover:bg-slate-800/60 hover:text-white">
+        <svg id="sb-toggle-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 6-6 6 6 6"/></svg>
+        <span class="sb-label">Collapse Sidebar</span>
+      </button>
+    </div>
+  </aside>
+
+  <!-- ===================== MAIN ===================== -->
+  <main id="main" class="min-h-screen transition-[margin] duration-200" style="margin-left: 260px;">
+
+    <header class="h-16 px-7 border-b border-slate-200 bg-white flex items-center gap-6 sticky top-0 z-30">
+      <h1 class="text-lg font-bold text-slate-900 tracking-tight shrink-0">{{ page_title or "System Overview" }}</h1>
+
+      <form action="/search" method="get" class="relative flex-1 max-w-xl">
+        <input id="global-search" name="q" type="search" autocomplete="off" placeholder="Search drug, event, project, source… (Enter to search)"
+               class="w-full bg-slate-50 border border-slate-200 rounded-lg pl-9 pr-3 py-2 text-sm placeholder-slate-400 focus:outline-none focus:bg-white focus:border-blue-400"/>
+        <svg class="absolute left-3 top-2.5 text-slate-400" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      </form>
+
+      <div class="flex items-center gap-2 shrink-0 ml-auto">
+        <a href="/projects/new" class="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold px-3.5 py-2 rounded-lg shadow-sm">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>
+          New Project
+        </a>
+        <div class="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 grid place-items-center text-white text-xs font-semibold ml-1">DR</div>
+      </div>
+    </header>
+
+    <div class="px-7 py-7">
+      {% block content %}{% endblock %}
+    </div>
+  </main>
+</div>
+
+<script>
+(function(){
+  const shell = document.getElementById('app-shell');
+  const sidebar = document.getElementById('sidebar');
+  const btn = document.getElementById('sb-toggle');
+  const ico = document.getElementById('sb-toggle-icon');
+  const KEY = 'srota-sidebar-collapsed';
+  const main = document.getElementById('main');
+  function apply(c){
+    shell.dataset.collapsed = c ? 'true' : 'false';
+    const w = c ? '68px' : '260px';
+    sidebar.style.width = w;
+    if (main) main.style.marginLeft = w;
+    document.querySelectorAll('.sb-label').forEach(el => el.style.display = c ? 'none' : '');
+    ico.innerHTML = c
+      ? '<path d="m9 6 6 6-6 6"/>'
+      : '<path d="m15 6-6 6 6 6"/>';
+  }
+  apply(localStorage.getItem(KEY) === '1');
+  btn.addEventListener('click', () => {
+    const c = shell.dataset.collapsed !== 'true';
+    localStorage.setItem(KEY, c ? '1' : '0');
+    apply(c);
+  });
+})();
+</script>
+
+{% block scripts %}{% endblock %}
+</body>
+</html>

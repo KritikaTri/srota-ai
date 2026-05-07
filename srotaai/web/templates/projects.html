@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% import "_macros.html" as ui %}
+
+{% block content %}
+
+<section class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+  <header class="px-5 py-4 border-b border-slate-100">
+    <h2 class="font-semibold text-slate-900">Projects</h2>
+    <p class="text-xs text-slate-500 mt-0.5">{{ project_rows|length }} project{{ '' if project_rows|length==1 else 's' }} · scheduler-driven keyword monitoring.</p>
+  </header>
+
+  {% if project_rows %}
+  <div class="overflow-x-auto">
+  <table class="w-full text-sm">
+    <thead class="text-[10px] uppercase tracking-wider text-slate-500 bg-slate-50/60">
+      <tr>
+        <th class="px-5 py-3 text-left font-semibold">Project</th>
+        <th class="px-5 py-3 text-left font-semibold">Cadence</th>
+        <th class="px-5 py-3 text-left font-semibold">Keywords</th>
+        <th class="px-5 py-3 text-left font-semibold">Sources</th>
+        <th class="px-5 py-3 text-right font-semibold">Records</th>
+        <th class="px-5 py-3 text-right font-semibold">Flagged</th>
+        <th class="px-5 py-3 text-left font-semibold">Last Run</th>
+        <th class="px-5 py-3 text-left font-semibold">Status</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for p in project_rows %}
+      <tr class="border-t border-slate-100 hover:bg-slate-50/60">
+        <td class="px-5 py-3">
+          <div class="font-semibold text-slate-900">{{ p.name or p.id }}</div>
+          <div class="text-[11px] text-slate-500 font-mono mt-0.5">{{ p.id }}</div>
+        </td>
+        <td class="px-5 py-3 text-slate-700 text-xs">
+          <span class="inline-flex items-center gap-1.5">
+            <span class="w-1.5 h-1.5 rounded-full
+              {% if p.cadence=='real_time' %}bg-emerald-500 animate-pulse{% elif p.cadence=='daily' %}bg-blue-500{% elif p.cadence=='weekly' %}bg-violet-500{% else %}bg-slate-400{% endif %}"></span>
+            {{ {'real_time':'Real-time','daily':'Daily','weekly':'Weekly','manual':'Manual'}.get(p.cadence, p.cadence) }}
+          </span>
+        </td>
+        <td class="px-5 py-3 text-slate-700 tabular-nums">{{ p.kw_count }}</td>
+        <td class="px-5 py-3 text-slate-700 tabular-nums">{{ p.sources_active }} / {{ p.sources_total }}</td>
+        <td class="px-5 py-3 text-right tabular-nums">{{ p.records }}</td>
+        <td class="px-5 py-3 text-right">
+          {% if p.flagged %}
+            <span class="font-bold text-red-600 tabular-nums">{{ p.flagged }}</span>
+          {% else %}
+            <span class="text-slate-400 tabular-nums">0</span>
+          {% endif %}
+        </td>
+        <td class="px-5 py-3 text-xs font-mono text-slate-500">{{ p.last_run or '—' }}</td>
+        <td class="px-5 py-3">{{ ui.pill(p.status, p.status_color) }}</td>
+        <td class="px-5 py-3 text-right">
+          <a href="/projects/{{ p.id }}" class="text-blue-600 hover:text-blue-700 font-semibold text-xs uppercase tracking-wider">Open →</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}
+  <div class="p-8">{{ ui.empty_state('No projects yet', 'Create your first monitoring project to start ingesting and triaging signals.', '+ New Project', '/projects/new') }}</div>
+  {% endif %}
+</section>
+{% endblock %}

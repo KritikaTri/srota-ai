@@ -1,0 +1,51 @@
+id: vaccine-safety-watch
+name: Vaccine Safety Watch
+keywords:
+- Pfizer
+- Moderna
+- Covaxin
+- Covishield
+- AstraZeneca
+- mRNA vaccine
+- myocarditis
+- pericarditis
+- anaphylaxis
+- thrombosis
+- fever
+- fatigue
+- headache
+sources:
+- name: reddit-vax
+  connector: reddit
+  params:
+    subreddits:
+    - AskDocs
+    - COVID19positive
+    limit: 150
+  latency: daily
+  time_window: null
+  time_windows: null
+  enabled: true
+- name: fda-cber-rss
+  connector: rss
+  params:
+    feed_url: https://www.fda.gov/about-fda/contact-fda/stay-informed/rss-feeds/cber/rss.xml
+  latency: daily
+  time_window: null
+  time_windows: null
+  enabled: true
+- name: faers-vaccines
+  connector: faers
+  params:
+    synthetic: true
+  latency: daily
+  time_window: null
+  time_windows: null
+  enabled: true
+description: Monitor mRNA & adenoviral COVID vaccines for adverse events across patient
+  communities and regulatory feeds.
+time_window:
+  lookback_days: 7
+  since: null
+  until: null
+time_windows: null

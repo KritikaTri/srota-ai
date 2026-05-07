@@ -1,0 +1,18 @@
+id: test3
+name: test3
+keywords:
+- fever
+sources:
+- name: reddit
+  connector: rss
+  params: {}
+  latency: daily
+  time_window: null
+  time_windows: null
+  enabled: true
+description: ''
+time_window:
+  lookback_days: 30
+  since: null
+  until: null
+time_windows: null

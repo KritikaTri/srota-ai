@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% import "_macros.html" as ui %}
+
+{% block content %}
+
+<!-- KPI strip -->
+<div class="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-6">
+  {{ ui.kpi_card('Audit Events', chain_total, sub_html='Append-only · hash-chained', accent='violet') }}
+  {{ ui.kpi_card('Chain Status', 'OK' if chain_ok else 'BROKEN', sub_html=('All entries verified' if chain_ok else ('Broken at #' ~ chain_broken_at)), accent=('emerald' if chain_ok else 'red')) }}
+  {{ ui.kpi_card('Records Redacted', kpis.redacted, sub_html=(kpis.pii_total_str ~ ' PII hits detected'), accent='blue') }}
+  {{ ui.kpi_card('Encryption', 'AES-256', sub_html='Envelope at rest', accent='indigo') }}
+</div>
+
+<section class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+  <header class="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+    <div>
+      <h2 class="font-semibold text-slate-900">Audit Trail</h2>
+      <p class="text-xs text-slate-500 mt-0.5">Tamper-evident, hash-chained event log.</p>
+    </div>
+    {% if chain_ok %}
+      {{ ui.pill('Chain verified · ' ~ chain_total ~ ' events', 'green') }}
+    {% else %}
+      {{ ui.pill('Chain broken at #' ~ chain_broken_at, 'red') }}
+    {% endif %}
+  </header>
+  <div class="overflow-x-auto">
+  <table class="w-full text-sm">
+    <thead class="text-[10px] uppercase tracking-wider text-slate-500 bg-slate-50/60">
+      <tr>
+        <th class="px-5 py-3 text-left font-semibold">#</th>
+        <th class="px-5 py-3 text-left font-semibold">Time</th>
+        <th class="px-5 py-3 text-left font-semibold">Action</th>
+        <th class="px-5 py-3 text-left font-semibold">User</th>
+        <th class="px-5 py-3 text-left font-semibold">Trace ID</th>
+        <th class="px-5 py-3 text-left font-semibold">Hash</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for a in audit %}
+      <tr class="border-t border-slate-100 hover:bg-slate-50/60">
+        <td class="px-5 py-2.5 text-slate-400 font-mono text-xs">{{ a.id }}</td>
+        <td class="px-5 py-2.5 font-mono text-xs text-slate-500">{{ a.time_full }}</td>
+        <td class="px-5 py-2.5 font-medium text-slate-900">{{ a.action_label }}</td>
+        <td class="px-5 py-2.5 text-slate-700">{{ a.user }}</td>
+        <td class="px-5 py-2.5 font-mono text-xs text-blue-600">{{ a.trace }}</td>
+        <td class="px-5 py-2.5 font-mono text-[10.5px] text-slate-400">{{ a.hash_short }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6" class="px-5 py-8 text-center text-slate-500">No audit entries yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</section>
+{% endblock %}

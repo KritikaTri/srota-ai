@@ -1,0 +1,183 @@
+{% extends "base.html" %}
+{% import "_macros.html" as ui %}
+
+{% block content %}
+
+<!-- KPI strip (kept consistent across pages) -->
+<div class="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-6">
+  {{ ui.kpi_card('Total Signals',     kpis.total_signals,     sub_html='Across all projects', accent='violet') }}
+  {{ ui.kpi_card('Critical (PRR≥3)',  kpis.signals_critical,  sub_html='Immediate review',    accent='red') }}
+  {{ ui.kpi_card('Watch (2≤PRR<3)',   kpis.signals_watch,     sub_html='Monitor trend',       accent='amber') }}
+  {{ ui.kpi_card('New · 24h',         kpis.new_signals,       sub_html='Last 24 hours',       accent='blue') }}
+</div>
+
+<section class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+  <header class="px-5 py-4 border-b border-slate-100 flex flex-col gap-3">
+    <div class="flex items-center justify-between gap-4">
+      <div>
+        <h2 class="font-semibold text-slate-900">Signal Triage Hub</h2>
+        <p class="text-xs text-slate-500 mt-0.5">All current-run drug↔event pairs sorted by PRR.</p>
+      </div>
+      <div class="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+        <span class="inline-flex items-center gap-1"><span class="w-2 h-2 bg-red-500 rounded-full"></span>PRR ≥ 3</span>
+        <span class="inline-flex items-center gap-1"><span class="w-2 h-2 bg-amber-500 rounded-full"></span>2 ≤ PRR &lt; 3</span>
+        <span class="inline-flex items-center gap-1"><span class="w-2 h-2 bg-blue-500 rounded-full"></span>PRR &lt; 2</span>
+      </div>
+    </div>
+    <div class="flex flex-wrap items-center gap-2">
+      <div class="relative flex-1 min-w-[260px] max-w-md">
+        <svg class="absolute left-3 top-2.5 text-slate-400" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <input id="sig-search" type="search" autocomplete="off"
+               placeholder="Search drug or event (e.g. metformin lactic)…"
+               class="w-full bg-slate-50 border border-slate-200 rounded-lg pl-9 pr-9 py-2 text-sm placeholder-slate-400 focus:outline-none focus:bg-white focus:border-blue-400"/>
+        <button id="sig-search-clear" type="button" class="hidden absolute right-2 top-1.5 text-slate-400 hover:text-slate-700 px-1.5 py-0.5 text-xs">✕</button>
+      </div>
+      <select id="sig-tier" class="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-2 text-xs font-medium text-slate-700 focus:outline-none focus:border-blue-400">
+        <option value="">All tiers</option>
+        <option value="red">Critical (PRR ≥ 3)</option>
+        <option value="amber">Watch (2 ≤ PRR &lt; 3)</option>
+        <option value="blue">Monitor (PRR &lt; 2)</option>
+      </select>
+      <select id="sig-minN" class="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-2 text-xs font-medium text-slate-700 focus:outline-none focus:border-blue-400">
+        <option value="0">Any n</option>
+        <option value="5">n ≥ 5</option>
+        <option value="10">n ≥ 10</option>
+        <option value="20">n ≥ 20</option>
+        <option value="40">n ≥ 40</option>
+      </select>
+      <span id="sig-count" class="text-xs text-slate-500 ml-auto"></span>
+    </div>
+  </header>
+
+  {% if signals %}
+  <div class="overflow-x-auto">
+  <table class="w-full text-sm">
+    <thead class="text-[10px] uppercase tracking-wider text-slate-500 bg-slate-50/60">
+      <tr>
+        <th class="px-4 py-3 text-left font-semibold">Drug → Event</th>
+        <th class="px-4 py-3 text-left font-semibold">Disproportionality</th>
+        <th class="px-4 py-3 text-left font-semibold">Tier</th>
+        <th class="px-4 py-3 text-left font-semibold">Confidence</th>
+        <th class="px-4 py-3 text-left font-semibold">Trend</th>
+        <th class="px-4 py-3 text-left font-semibold">First Detected</th>
+        <th class="px-4 py-3 text-left font-semibold">Sources</th>
+        <th class="px-4 py-3 text-left font-semibold">Status</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for s in signals %}
+      <tr class="sig-row border-t border-slate-100 hover:bg-slate-50/60 cursor-pointer"
+          data-search="{{ (s.drug ~ ' ' ~ s.event ~ ' ' ~ s.sig_id ~ ' ' ~ s.project_id)|lower }}"
+          data-tier="{{ s.prr_color }}"
+          data-n="{{ s.n }}"
+          onclick="location.href='/signals/{{ s.id }}'">
+        <td class="px-4 py-3">
+          <div class="font-semibold text-slate-900">{{ s.drug }} <span class="text-slate-400">→</span> {{ s.event }}</div>
+          <div class="text-[11px] text-slate-500 font-mono mt-0.5">{{ s.sig_id }} · <a href="/projects/{{ s.project_id }}" class="text-blue-600 hover:underline">{{ s.project_id }}</a>
+            <span class="ml-1 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider
+              {% if s.cadence == 'real_time' %}bg-green-100 text-green-700{% elif s.cadence == 'weekly' %}bg-purple-100 text-purple-700{% else %}bg-blue-100 text-blue-700{% endif %}">↻ {{ s.cadence|replace('_', '-') }}</span>
+          </div>
+        </td>
+        <td class="px-4 py-3">
+          <div class="flex items-center gap-2">
+            <span class="font-bold tabular-nums text-base
+              {% if s.prr_color=='red' %}text-red-600{% elif s.prr_color=='amber' %}text-amber-600{% else %}text-blue-600{% endif %}">{{ s.prr_str }}</span>
+            <span class="text-[10px] font-semibold text-slate-400">PRR</span>
+          </div>
+          <div class="text-[11px] text-slate-500 mt-0.5 font-mono">χ²={{ s.chi_str }} · n={{ s.n }}</div>
+        </td>
+        <td class="px-4 py-3">
+          {{ ui.pill(s.tier_label, s.tier_color) }}
+        </td>
+        <td class="px-4 py-3">
+          {{ ui.pill(s.conf_label, s.conf_color) }}
+          <div class="mt-1.5 w-24 h-1.5 bg-slate-100 rounded">
+            <div class="h-full rounded
+              {% if s.conf_color=='red' %}bg-red-500{% elif s.conf_color=='amber' %}bg-amber-500{% else %}bg-slate-400{% endif %}"
+              style="width: {{ s.conf }}%"></div>
+          </div>
+        </td>
+        <td class="px-4 py-3 text-sm">
+          {% set t = s.trend %}
+          <span class="inline-flex items-center gap-1 font-medium
+            {% if t[1]=='red'     %}text-red-600{% endif %}
+            {% if t[1]=='emerald' %}text-emerald-600{% endif %}
+            {% if t[1]=='green'   %}text-emerald-600{% endif %}
+            {% if t[1]=='gray'    %}text-slate-500{% endif %}
+            {% if t[1]=='blue'    %}text-blue-600{% endif %}">{{ t[2] }} {{ t[3] }}</span>
+          <div class="text-[11px] text-slate-400">{{ t[0]|lower }}</div>
+        </td>
+        <td class="px-4 py-3 text-sm tabular-nums font-mono text-slate-700">{{ s.first_detected }}</td>
+        <td class="px-4 py-3 text-sm">
+          <div class="font-semibold text-slate-900">{{ s.src_count or '—' }}</div>
+          <div class="text-[11px] text-slate-500 truncate max-w-[200px]">{{ s.src_names or '—' }}</div>
+        </td>
+        <td class="px-4 py-3">{{ ui.pill(s.status[0], s.status[1]) }}</td>
+        <td class="px-4 py-3 text-right text-slate-400 hover:text-slate-700 cursor-pointer">⋯</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  <div id="sig-empty" class="hidden p-8 text-center text-sm text-slate-500">
+    No signals match your filters. <button type="button" id="sig-reset" class="text-blue-600 hover:underline">Clear filters</button>
+  </div>
+  {% else %}
+  <div class="p-8">{{ ui.empty_state('No signals yet', 'Run a project to compute drug↔event disproportionality.', 'View Projects', '/projects') }}</div>
+  {% endif %}
+</section>
+
+<script>
+(function(){
+  const search = document.getElementById('sig-search');
+  if (!search) return;
+  const tierSel = document.getElementById('sig-tier');
+  const nSel    = document.getElementById('sig-minN');
+  const clear   = document.getElementById('sig-search-clear');
+  const count   = document.getElementById('sig-count');
+  const empty   = document.getElementById('sig-empty');
+  const reset   = document.getElementById('sig-reset');
+  const rows    = Array.from(document.querySelectorAll('tr.sig-row'));
+  const total   = rows.length;
+
+  function tokenize(q){ return q.toLowerCase().split(/\s+/).filter(Boolean); }
+
+  function apply(){
+    const tokens = tokenize(search.value);
+    const tier   = tierSel.value;
+    const minN   = parseInt(nSel.value || '0', 10);
+    let visible = 0;
+    for (const r of rows){
+      const hay = r.dataset.search;
+      const matchTxt  = tokens.every(t => hay.includes(t));
+      const matchTier = !tier || r.dataset.tier === tier;
+      const matchN    = parseInt(r.dataset.n || '0', 10) >= minN;
+      const show = matchTxt && matchTier && matchN;
+      r.style.display = show ? '' : 'none';
+      if (show) visible++;
+    }
+    count.textContent = visible === total
+      ? `${total} signals`
+      : `${visible} of ${total} signals`;
+    empty.classList.toggle('hidden', visible !== 0);
+    clear.classList.toggle('hidden', !search.value);
+  }
+
+  search.addEventListener('input', apply);
+  tierSel.addEventListener('change', apply);
+  nSel.addEventListener('change', apply);
+  clear.addEventListener('click', () => { search.value=''; apply(); search.focus(); });
+  if (reset) reset.addEventListener('click', () => {
+    search.value=''; tierSel.value=''; nSel.value='0'; apply(); search.focus();
+  });
+
+  // Support ?q=metformin+lactic deep-link
+  const params = new URLSearchParams(location.search);
+  if (params.get('q')) search.value = params.get('q');
+  if (params.get('tier')) tierSel.value = params.get('tier');
+  apply();
+  if (params.get('q')) search.focus();
+})();
+</script>
+{% endblock %}

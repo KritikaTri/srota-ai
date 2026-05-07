@@ -1,0 +1,313 @@
+{% extends "base.html" %}
+{% import "_macros.html" as ui %}
+
+{% block content %}
+<a href="/signals" class="inline-flex items-center text-sm text-slate-500 hover:text-slate-700 mb-4">←</a>
+
+<div class="grid grid-cols-12 gap-6">
+
+  <!-- =========================== Left rail: Source Contribution =========================== -->
+  <aside class="col-span-12 xl:col-span-3 space-y-4">
+    <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+      <header class="px-4 py-3 border-b border-slate-100">
+        <h3 class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-700">Source Contribution</h3>
+        <p class="text-[11px] text-slate-500 mt-0.5">Raw record counts per connector across the entire project corpus.</p>
+      </header>
+      {% if detail.source_breakdown %}
+      <ul class="divide-y divide-slate-100">
+        {% for sb in detail.source_breakdown %}
+        <li class="px-4 py-3">
+          <div class="flex items-center justify-between mb-1.5">
+            <div class="min-w-0">
+              <div class="text-sm font-semibold text-slate-900 truncate">{{ sb.pretty }}</div>
+              <div class="text-[10px] font-mono text-slate-400 truncate">{{ sb.source_name }}</div>
+            </div>
+            <div class="text-right shrink-0 ml-2">
+              <div class="text-base font-bold tabular-nums text-slate-900">{{ sb.n }}</div>
+              <div class="text-[10px] text-slate-500">{{ sb.pct }}%</div>
+            </div>
+          </div>
+          <div class="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+            <div class="h-full {% if sb.connector == 'reddit' %}bg-orange-500{% elif sb.connector == 'rss' %}bg-violet-500{% elif sb.connector in ('faers','openfda') %}bg-blue-600{% elif sb.connector in ('html_stealth','html_listing') %}bg-emerald-500{% elif sb.connector in ('x','x_stub') %}bg-slate-700{% else %}bg-indigo-500{% endif %}"
+                 style="width: {{ sb.bar_pct }}%"></div>
+          </div>
+        </li>
+        {% endfor %}
+      </ul>
+      <footer class="px-4 py-2.5 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
+        <span>{{ detail.source_breakdown_total }} total records</span>
+        <span class="font-mono">project corpus</span>
+      </footer>
+      {% else %}
+      <div class="p-5 text-center text-slate-500 text-sm">No records ingested yet.</div>
+      {% endif %}
+    </div>
+  </aside>
+
+  <!-- =========================== Main column =========================== -->
+  <div class="col-span-12 xl:col-span-9 space-y-6">
+
+    <!-- Header -->
+    <header class="flex items-center justify-between">
+      <div>
+        <h1 class="text-2xl font-bold text-slate-900 tracking-tight">Investigation Workspace</h1>
+        <p class="mt-1 text-sm text-slate-500">Deep trace analysis for <span class="font-semibold text-slate-700">{{ detail.drug }} × {{ detail.event }}</span></p>
+      </div>
+      <a href="/signals" class="text-[10px] font-bold uppercase tracking-wider text-slate-500 hover:text-slate-800 border border-slate-300 rounded-lg px-3 py-1.5">CLOSE WORKSPACE</a>
+    </header>
+
+    <!-- Drug × Event banner -->
+    <section class="bg-white border border-slate-200 rounded-xl shadow-sm p-5">
+      <div class="flex items-center justify-between gap-4 flex-wrap">
+        <div class="flex items-center gap-3">
+          <h2 class="text-2xl font-bold text-slate-900 tracking-tight">{{ detail.drug }}</h2>
+          <span class="text-2xl text-slate-300">×</span>
+          <h2 class="text-2xl font-bold text-slate-900 tracking-tight">{{ detail.event }}</h2>
+        </div>
+        <div class="flex items-center gap-2">
+          <button class="text-sm font-semibold px-3 py-2 rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-100">Ignore</button>
+          <button class="bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold px-3.5 py-2 rounded-lg shadow-sm">Escalate Triage</button>
+        </div>
+      </div>
+      <div class="mt-3 flex items-center gap-2 flex-wrap">
+        <span class="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200" title="{{ detail.last_fetched_iso or 'never' }}">⟳ LAST FETCHED: {{ detail.last_fetched_human }}</span>
+        <span class="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200">CADENCE: {{ detail.cadence_label }}</span>
+        <span class="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200">⚡ {{ detail.total_mentions }} TOTAL MENTIONS</span>
+        <span class="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded
+          {% if detail.strength_color=='red' %}bg-red-50 text-red-700 border border-red-200
+          {% elif detail.strength_color=='amber' %}bg-amber-50 text-amber-700 border border-amber-200
+          {% else %}bg-slate-100 text-slate-600 border border-slate-200{% endif %}">STRENGTH: {{ detail.strength_label }} ({{ detail.strength_pct }}%)</span>
+        {% if detail.quality_warning %}
+        <span class="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200">⚠ QUALITY WARNING: REDDIT LATENCY</span>
+        {% endif %}
+      </div>
+      {% if detail.quality_warning %}
+      <div class="mt-4 p-3 bg-amber-50 border-l-4 border-amber-400 text-xs text-amber-800 rounded">
+        <strong>Data Quality Alert:</strong> {{ detail.quality_warning }}
+      </div>
+      {% endif %}
+    </section>
+
+    <!-- Why this signal was detected -->
+    <section class="bg-white border border-slate-200 rounded-xl shadow-sm p-5">
+      <h3 class="font-semibold text-slate-900 mb-4 flex items-center gap-2"><span class="text-blue-600">📊</span> Why this signal was detected</h3>
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        {% for stat in [
+          ('PRR (PROPORTIONAL)',     detail.stats.prr,  detail.stats.prr_thr),
+          ('ROR (ODDS RATIO)',       detail.stats.ror,  detail.stats.ror_thr),
+          ('YATES-CORRECTED χ²',     detail.stats.chi2, detail.stats.chi2_thr),
+          ('BAYESIAN IC',            detail.stats.ic,   detail.stats.ic_thr),
+        ] %}
+        <div class="rounded-lg p-3 border border-blue-100 bg-blue-50/40">
+          <div class="text-[10px] font-bold uppercase tracking-wider text-slate-500">{{ stat[0] }}</div>
+          <div class="mt-1 text-3xl font-bold tabular-nums text-blue-700">{{ stat[1] }}</div>
+          <div class="text-[10px] text-slate-500 mt-1">thr: {{ stat[2].split(' ')[-1] }}</div>
+        </div>
+        {% endfor %}
+      </div>
+    </section>
+
+    <!-- 2x2 contingency + Signal context -->
+    <section class="grid grid-cols-1 lg:grid-cols-5 gap-4">
+      <div class="lg:col-span-3 bg-white border border-slate-200 rounded-xl shadow-sm p-5">
+        <div class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 mb-3">2×2 CONTINGENCY MATRIX</div>
+        <table class="w-full text-sm border border-slate-200 rounded-lg overflow-hidden">
+          <thead class="bg-slate-50">
+            <tr>
+              <th class="border-b border-r border-slate-200 px-3 py-2 text-slate-400 font-normal">—</th>
+              <th class="border-b border-slate-200 px-3 py-2 text-left text-[11px] font-bold uppercase tracking-wider text-slate-700">Event (+)</th>
+              <th class="border-b border-l border-slate-200 px-3 py-2 text-left text-[11px] font-bold uppercase tracking-wider text-slate-700">Event (−)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th class="border-r border-slate-200 px-3 py-3 text-left text-[11px] font-bold uppercase tracking-wider text-slate-700 bg-slate-50">Drug (+)</th>
+              <td class="px-3 py-3 text-blue-600 font-bold tabular-nums text-base">{{ detail.contingency.a }}</td>
+              <td class="border-l border-slate-200 px-3 py-3 text-slate-700 tabular-nums text-base">{{ detail.contingency.b }}</td>
+            </tr>
+            <tr class="border-t border-slate-200">
+              <th class="border-r border-slate-200 px-3 py-3 text-left text-[11px] font-bold uppercase tracking-wider text-slate-700 bg-slate-50">Drug (−)</th>
+              <td class="px-3 py-3 text-slate-700 tabular-nums text-base">{{ detail.contingency.c }}</td>
+              <td class="border-l border-slate-200 px-3 py-3 text-slate-700 tabular-nums text-base">{{ detail.contingency.d }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="lg:col-span-2 bg-white border border-slate-200 rounded-xl shadow-sm p-5">
+        <div class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 mb-3">SIGNAL CONTEXT</div>
+        <div class="space-y-3 text-sm">
+          <div class="flex items-center justify-between">
+            <span class="text-slate-500">Scan Window</span>
+            <span class="font-semibold text-slate-900">{{ detail.scan_window_label }}</span>
+          </div>
+          <div class="flex items-center justify-between">
+            <span class="text-slate-500">Sources Involved</span>
+            <div class="flex items-center gap-1 flex-wrap justify-end">
+              {% for src in detail.sources_pretty %}
+              <span class="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200">{{ src }}</span>
+              {% else %}<span class="text-xs text-slate-400">—</span>{% endfor %}
+            </div>
+          </div>
+          <div class="flex items-center justify-between">
+            <span class="text-slate-500">Confidence Score</span>
+            <span class="font-bold text-emerald-600">{{ detail.conf }}%</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Longitudinal Trend -->
+    <section class="bg-white border border-slate-200 rounded-xl shadow-sm p-5">
+      <h3 class="font-semibold text-slate-900 mb-4 flex items-center gap-2"><span class="text-emerald-600">📈</span> Longitudinal Trend Intelligence</h3>
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div class="space-y-3">
+          <div class="rounded-lg p-4 border border-slate-200">
+            <div class="text-[10px] font-bold uppercase tracking-wider text-slate-500">TREND STATUS</div>
+            <div class="mt-1.5 flex items-center gap-2">
+              <span class="text-2xl
+                {% if detail.trend_color=='red' %}text-red-600{% elif detail.trend_color=='emerald' %}text-emerald-600{% else %}text-blue-600{% endif %}">{{ detail.trend_icon }}</span>
+              <div>
+                <div class="font-bold text-slate-900 text-base">{{ detail.trend_status }}</div>
+                <div class="text-[11px] text-slate-500">Directional vector based on {{ detail.scan_window_label }} window</div>
+              </div>
+            </div>
+          </div>
+          <div class="rounded-lg p-4 border border-slate-200">
+            <div class="text-[10px] font-bold uppercase tracking-wider text-slate-500">RELATIVE GROWTH</div>
+            <div class="mt-1.5 text-3xl font-bold tabular-nums
+              {% if detail.rel_growth_pct > 0 %}text-red-600{% elif detail.rel_growth_pct < 0 %}text-emerald-600{% else %}text-slate-700{% endif %}">{% if detail.rel_growth_pct > 0 %}+{% endif %}{{ detail.rel_growth_pct }}%</div>
+            <div class="text-[11px] text-slate-500 mt-1">vs. baseline</div>
+          </div>
+        </div>
+        <div class="lg:col-span-2 bg-slate-900 rounded-lg p-4 text-white">
+          <div class="flex items-center justify-between">
+            <div class="text-[10px] font-bold uppercase tracking-wider text-slate-400">SIGNAL TIMELINE (MENTIONS)</div>
+            <div class="text-[10px] uppercase tracking-wider text-slate-500">UNIT: COUNTS / DAY</div>
+          </div>
+          <div class="mt-4 flex items-end gap-1 h-40">
+            {% set tmax = detail.timeline_max or 1 %}
+            {% for d, v in detail.timeline %}
+            <div class="flex-1 bg-blue-500 rounded-t hover:bg-blue-400 transition" style="height: {{ (100 * v / tmax)|round(1) }}%" title="{{ d }}: {{ v }}"></div>
+            {% endfor %}
+          </div>
+          <div class="mt-2 flex justify-between text-[10px] text-slate-500 font-mono">
+            <span>{{ detail.timeline[0][0][5:] if detail.timeline else '' }}</span>
+            <span>{{ detail.timeline[(detail.timeline|length // 2)][0][5:] if detail.timeline else '' }}</span>
+            <span>{{ detail.timeline[-1][0][5:] if detail.timeline else '' }}</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Automated Sentiment Intelligence -->
+    <section class="bg-white border border-slate-200 rounded-xl shadow-sm p-5">
+      <h3 class="font-semibold text-slate-900 mb-4 flex items-center gap-2"><span class="text-blue-600">🧠</span> Automated Sentiment Intelligence</h3>
+
+      <!-- Context strip: this signal vs the whole project -->
+      <div class="mb-5 grid grid-cols-1 md:grid-cols-2 gap-3 text-[11px]">
+        <div class="rounded-lg border border-blue-200 bg-blue-50/40 px-3 py-2">
+          <div class="font-bold uppercase tracking-wider text-blue-800 text-[10px] mb-1">This signal's evidence</div>
+          <div class="flex items-center gap-2 font-mono">
+            <span class="text-red-700">{{ detail.sent_mix.negative_pct }}% neg</span>·
+            <span class="text-slate-700">{{ detail.sent_mix.neutral_pct }}% neu</span>·
+            <span class="text-emerald-700">{{ detail.sent_mix.positive_pct }}% pos</span>
+            <span class="ml-auto text-slate-500">n={{ detail.sent_mix.negative + detail.sent_mix.neutral + detail.sent_mix.positive }}</span>
+          </div>
+          <div class="text-slate-500 mt-0.5">Naturally skews negative — these posts contain ADR words by construction.</div>
+        </div>
+        <div class="rounded-lg border border-slate-200 bg-slate-50/60 px-3 py-2">
+          <div class="font-bold uppercase tracking-wider text-slate-700 text-[10px] mb-1">Project-wide baseline (all records)</div>
+          <div class="flex items-center gap-2 font-mono">
+            <span class="text-red-700">{{ detail.project_sent_mix.negative_pct }}% neg</span>·
+            <span class="text-slate-700">{{ detail.project_sent_mix.neutral_pct }}% neu</span>·
+            <span class="text-emerald-700">{{ detail.project_sent_mix.positive_pct }}% pos</span>
+            <span class="ml-auto text-slate-500">n={{ detail.project_sent_mix.total }}</span>
+          </div>
+          <div class="text-slate-500 mt-0.5">Whole project across every source — NOT specific to {{ detail.drug }} × {{ detail.event }}.</div>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Mix bars -->
+        <div>
+          <div class="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-3">
+            <span>OVERALL SENTIMENT MIX</span>
+            <span class="flex items-center gap-3">
+              <span class="inline-flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-red-500"></span>{{ detail.sent_mix.negative_pct }}%</span>
+              <span class="inline-flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span>{{ detail.sent_mix.neutral_pct }}%</span>
+              <span class="inline-flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>{{ detail.sent_mix.positive_pct }}%</span>
+            </span>
+          </div>
+          {% for label, color, pct, count in [
+            ('Negative', 'red',     detail.sent_mix.negative_pct, detail.sent_mix.negative),
+            ('Neutral',  'slate',   detail.sent_mix.neutral_pct,  detail.sent_mix.neutral),
+            ('Positive', 'emerald', detail.sent_mix.positive_pct, detail.sent_mix.positive),
+          ] %}
+          <div class="mb-3">
+            <div class="flex items-center justify-between text-xs text-slate-600 mb-1">
+              <span>{{ label }}</span><span class="tabular-nums">{{ count }}</span>
+            </div>
+            <div class="h-3 bg-slate-100 rounded">
+              <div class="h-full rounded
+                {% if color=='red' %}bg-red-500{% elif color=='emerald' %}bg-emerald-500{% else %}bg-slate-400{% endif %}"
+                style="width: {{ pct }}%"></div>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+        <!-- Trajectory line -->
+        <div>
+          <div class="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-3">SENTIMENT TRAJECTORY</div>
+          {% set trajN = detail.sentiment_trajectory|length %}
+          {% set tmax2 = namespace(v=1) %}
+          {% for d, b in detail.sentiment_trajectory %}{% set total = b.negative + b.neutral + b.positive %}{% if total > tmax2.v %}{% set tmax2.v = total %}{% endif %}{% endfor %}
+          <svg viewBox="0 0 600 180" class="w-full h-44">
+            {% set step = 600 / (trajN - 1 if trajN > 1 else 1) %}
+            {% for color, key in [('#ef4444','negative'),('#94a3b8','neutral'),('#10b981','positive')] %}
+              <polyline fill="none" stroke="{{ color }}" stroke-width="2"
+                points="{% for d, b in detail.sentiment_trajectory %}{{ (loop.index0 * step)|round(1) }},{{ (180 - 170 * b[key] / tmax2.v)|round(1) }} {% endfor %}"/>
+            {% endfor %}
+          </svg>
+          <div class="mt-1 flex items-center gap-3 text-[10px] text-slate-500">
+            <span class="inline-flex items-center gap-1"><span class="w-2 h-px bg-red-500"></span>Negative</span>
+            <span class="inline-flex items-center gap-1"><span class="w-2 h-px bg-slate-400"></span>Neutral</span>
+            <span class="inline-flex items-center gap-1"><span class="w-2 h-px bg-emerald-500"></span>Positive</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Supporting Evidence Records -->
+    <section class="bg-white border border-slate-200 rounded-xl shadow-sm p-5">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="font-semibold text-slate-900 flex items-center gap-2 italic"><em>Supporting Evidence Records</em>
+          <span class="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 not-italic">{{ detail.evidence_total }} CONTRIBUTING POSTS</span>
+        </h3>
+        <div class="text-[10px] text-slate-500">Privacy Layer: <span class="font-mono">PIV-v4</span></div>
+      </div>
+      {% if detail.evidence %}
+      <div class="space-y-3">
+        {% for ev in detail.evidence %}
+        <div class="border border-slate-200 rounded-lg p-3.5">
+          <div class="flex items-center gap-2 text-[11px] font-mono text-slate-500 mb-1.5">
+            <span>[{{ ev.connector|capitalize }}/{{ ev.source_name }}]</span>
+            <span>{{ ev.posted_at }}</span>
+            {{ ui.pill(ev.sentiment, ev.sentiment_color) }}
+          </div>
+          <div class="text-sm text-slate-800 leading-relaxed">{{ ev.snippet_html|safe }}</div>
+          <div class="mt-2 flex items-center gap-3 text-[10px] uppercase tracking-wider text-slate-500">
+            <span class="inline-flex items-center gap-1"><span class="w-1 h-1 rounded-full bg-emerald-500"></span>DRUG EXTRACTION: {{ ev.drug_conf or 90 }}% CONF</span>
+            <span class="inline-flex items-center gap-1"><span class="w-1 h-1 rounded-full bg-emerald-500"></span>SYMPTOM MATCH: {{ ev.sym_conf or 94 }}% CONF</span>
+            {% if ev.pii_hits %}<span class="inline-flex items-center gap-1"><span class="w-1 h-1 rounded-full bg-blue-500"></span>{{ ev.pii_hits }} PII REDACTED</span>{% endif %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      {{ ui.empty_state('No contributing records yet', 'Evidence appears after the next scheduler tick fetches matching content.') }}
+      {% endif %}
+    </section>
+
+  </div>
+</div>
+{% endblock %}

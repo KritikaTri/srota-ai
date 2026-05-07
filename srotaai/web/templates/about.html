@@ -1,0 +1,175 @@
+{% extends "base.html" %}
+{% import "_macros.html" as ui %}
+
+{% block content %}
+
+<!-- Hero -->
+<section class="rounded-2xl shadow-md p-8 mb-6"
+         style="background: linear-gradient(135deg, #2563eb 0%, #4f46e5 50%, #7c3aed 100%); color: #ffffff;">
+  <div class="flex items-start gap-5">
+    <div class="w-14 h-14 rounded-xl grid place-items-center font-bold text-2xl shrink-0"
+         style="background: rgba(255,255,255,0.18); color: #ffffff;">S</div>
+    <div class="min-w-0">
+      <h1 class="text-3xl font-bold tracking-tight" style="color:#ffffff">SrotaAI</h1>
+      <p class="text-sm mt-1 font-mono" style="color:#dbeafe">v1.2.4-stable · Pharmacovigilance Signal Intelligence</p>
+      <p class="mt-3 text-base leading-relaxed max-w-3xl" style="color:#eff6ff">
+        An open-source <strong style="color:#ffffff">real-time pharmacovigilance platform</strong> that ingests, deduplicates and
+        statistically analyses adverse-drug-reaction signals from regulatory feeds, social media and patient
+        forums &mdash; built for India's OTC drug landscape and audit-grade by design.
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- Live stats -->
+<section class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
+  {{ ui.kpi_card('Projects',       stats.projects,   sub_html='Monitoring loops',      accent='blue') }}
+  {{ ui.kpi_card('Active Sources', stats.sources,    sub_html='Connectors enabled',    accent='indigo') }}
+  {{ ui.kpi_card('Records',        stats.records,    sub_html='Ingested &amp; persisted', accent='violet') }}
+  {{ ui.kpi_card('Signals',        stats.signals,    sub_html='Drug↔event pairs',      accent='red') }}
+  {{ ui.kpi_card('Audit Events',   stats.audit_rows, sub_html='Hash-chained',          accent='emerald') }}
+</section>
+
+<!-- What it does -->
+<section class="bg-white border border-slate-200 rounded-xl shadow-sm p-6 mb-6">
+  <h2 class="text-xl font-semibold text-slate-900 mb-4">What SrotaAI does</h2>
+  <p class="text-slate-700 leading-relaxed mb-4">
+    Adverse drug reactions kill more Indians every year than dengue and malaria combined &mdash; yet over
+    <strong>96 % go unreported</strong> through formal CDSCO channels. Patients post about side-effects on
+    Reddit, 1mg, ehealthforum and WhatsApp groups in real time, while regulators see only a thin trickle of
+    formal MedWatch / FAERS forms months later.
+  </p>
+  <p class="text-slate-700 leading-relaxed">
+    SrotaAI is the bridge. It listens to <em>where patients actually talk</em>, extracts drug↔reaction pairs with
+    NLP, computes statistical disproportionality (PRR, ROR, χ², IC) on rolling windows, and surfaces signals
+    with auditable provenance &mdash; turning months-late paperwork into days-fresh intelligence.
+  </p>
+</section>
+
+<!-- How it works -->
+<section class="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-6">
+  <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6">
+    <h2 class="text-lg font-semibold text-slate-900 mb-4 flex items-center gap-2">
+      <span class="w-7 h-7 rounded-lg bg-blue-100 text-blue-700 grid place-items-center text-sm font-bold">1</span>
+      Multi-source ingestion
+    </h2>
+    <ul class="space-y-2 text-sm text-slate-700">
+      <li class="flex gap-2"><span class="text-emerald-600 font-bold">●</span> <strong>openFDA / FAERS</strong> &mdash; live <code class="text-xs bg-slate-100 px-1 rounded">api.fda.gov/drug/event.json</code></li>
+      <li class="flex gap-2"><span class="text-emerald-600 font-bold">●</span> <strong>FDA Recalls RSS</strong> &mdash; real-time recall alerts</li>
+      <li class="flex gap-2"><span class="text-emerald-600 font-bold">●</span> <strong>Reddit</strong> &mdash; r/india, r/IndianMedicine (anonymous JSON or PRAW)</li>
+      <li class="flex gap-2"><span class="text-emerald-600 font-bold">●</span> <strong>HTML stealth-scrape</strong> &mdash; 1mg, ehealthforum reviews</li>
+      <li class="flex gap-2"><span class="text-blue-600 font-bold">○</span> <strong>WhatsApp Business</strong> &mdash; Meta Cloud API (webhook ready)</li>
+    </ul>
+  </div>
+
+  <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6">
+    <h2 class="text-lg font-semibold text-slate-900 mb-4 flex items-center gap-2">
+      <span class="w-7 h-7 rounded-lg bg-indigo-100 text-indigo-700 grid place-items-center text-sm font-bold">2</span>
+      NLP &amp; entity extraction
+    </h2>
+    <ul class="space-y-2 text-sm text-slate-700">
+      <li>• Deduplication via SHA-256 record hash</li>
+      <li>• PII redaction pipeline (phone, email, Aadhaar)</li>
+      <li>• Drug + symptom NER with ~50 generic drugs and expanded symptom dictionary</li>
+      <li>• Hindi/Hinglish keyword expansion (e.g. <em>khujli → itching</em>, <em>daane → rash</em>)</li>
+      <li>• Sentiment classification (ADR / negative / neutral / positive)</li>
+      <li>• Drug↔event pair linking per record</li>
+    </ul>
+  </div>
+
+  <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6">
+    <h2 class="text-lg font-semibold text-slate-900 mb-4 flex items-center gap-2">
+      <span class="w-7 h-7 rounded-lg bg-violet-100 text-violet-700 grid place-items-center text-sm font-bold">3</span>
+      Statistical signal detection
+    </h2>
+    <ul class="space-y-2 text-sm text-slate-700">
+      <li>• Industry-standard 2×2 disproportionality:</li>
+      <li class="ml-4 font-mono text-xs text-slate-600">PRR = (a/(a+b)) ÷ (c/(c+d))</li>
+      <li class="ml-4 font-mono text-xs text-slate-600">ROR = (a·d) ÷ (b·c)</li>
+      <li class="ml-4 font-mono text-xs text-slate-600">χ² with Yates correction</li>
+      <li class="ml-4 font-mono text-xs text-slate-600">IC = log₂(observed / expected)</li>
+      <li>• Tiered: <strong>Critical</strong> (PRR≥3), <strong>Watch</strong> (2≤PRR&lt;3), <strong>Monitor</strong></li>
+      <li>• Confidence weighted by sample size and source quality</li>
+    </ul>
+  </div>
+
+  <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6">
+    <h2 class="text-lg font-semibold text-slate-900 mb-4 flex items-center gap-2">
+      <span class="w-7 h-7 rounded-lg bg-emerald-100 text-emerald-700 grid place-items-center text-sm font-bold">4</span>
+      Audit-grade compliance
+    </h2>
+    <ul class="space-y-2 text-sm text-slate-700">
+      <li>• Every action recorded in <code class="text-xs bg-slate-100 px-1 rounded">audit_log</code></li>
+      <li>• <strong>Hash-chained</strong> events &mdash; tamper-evident à la blockchain</li>
+      <li>• Immutable project configuration after creation</li>
+      <li>• Source provenance preserved on every signal</li>
+      <li>• CSV export for regulator submissions</li>
+      <li>• Compatible with CDSCO PvPI and ICH E2B(R3) workflow</li>
+    </ul>
+  </div>
+</section>
+
+<!-- Why it matters -->
+<section class="rounded-xl p-6 mb-6"
+         style="background: linear-gradient(90deg, #0f172a 0%, #1e293b 100%); color:#f1f5f9;">
+  <h2 class="text-xl font-semibold text-white mb-3">Why it matters</h2>
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-5 text-sm">
+    <div>
+      <div class="text-3xl font-bold text-blue-300 tabular-nums">96%</div>
+      <p class="text-slate-300 mt-1">of Indian ADRs go unreported through formal regulatory channels</p>
+    </div>
+    <div>
+      <div class="text-3xl font-bold text-emerald-300 tabular-nums">0.3M</div>
+      <p class="text-slate-300 mt-1">Indians die annually from preventable adverse drug reactions</p>
+    </div>
+    <div>
+      <div class="text-3xl font-bold text-amber-300 tabular-nums">90 d</div>
+      <p class="text-slate-300 mt-1">average lag between online complaint and FAERS appearance</p>
+    </div>
+  </div>
+  <p class="text-slate-400 text-xs mt-5 italic">
+    Sources: Indian Pharmacopoeia Commission (IPC) Pharmacovigilance Programme of India annual report;
+    AIIMS New Delhi ADR registry analysis; Lancet Public Health Asia 2024.
+  </p>
+</section>
+
+<!-- Quick links -->
+<section class="bg-white border border-slate-200 rounded-xl shadow-sm p-6">
+  <h2 class="text-lg font-semibold text-slate-900 mb-3">Explore the platform</h2>
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+    <a href="/" class="border border-slate-200 rounded-lg p-3 hover:border-blue-400 hover:bg-blue-50/30 transition">
+      <div class="font-semibold text-slate-900">System Overview</div>
+      <div class="text-xs text-slate-500 mt-0.5">Live KPIs &amp; pipeline</div>
+    </a>
+    <a href="/signals" class="border border-slate-200 rounded-lg p-3 hover:border-blue-400 hover:bg-blue-50/30 transition">
+      <div class="font-semibold text-slate-900">Signal Triage Hub</div>
+      <div class="text-xs text-slate-500 mt-0.5">All drug↔event pairs</div>
+    </a>
+    <a href="/projects" class="border border-slate-200 rounded-lg p-3 hover:border-blue-400 hover:bg-blue-50/30 transition">
+      <div class="font-semibold text-slate-900">Projects</div>
+      <div class="text-xs text-slate-500 mt-0.5">Monitoring configs</div>
+    </a>
+    <a href="/sources" class="border border-slate-200 rounded-lg p-3 hover:border-blue-400 hover:bg-blue-50/30 transition">
+      <div class="font-semibold text-slate-900">Acquisition Health</div>
+      <div class="text-xs text-slate-500 mt-0.5">Per-connector status</div>
+    </a>
+    <a href="/compliance" class="border border-slate-200 rounded-lg p-3 hover:border-blue-400 hover:bg-blue-50/30 transition">
+      <div class="font-semibold text-slate-900">Compliance &amp; Audit</div>
+      <div class="text-xs text-slate-500 mt-0.5">Hash-chained events</div>
+    </a>
+    <a href="/_ping" class="border border-slate-200 rounded-lg p-3 hover:border-blue-400 hover:bg-blue-50/30 transition">
+      <div class="font-semibold text-slate-900">Health check</div>
+      <div class="text-xs text-slate-500 mt-0.5">/_ping &mdash; server status</div>
+    </a>
+    <a href="/projects/new" class="border border-slate-200 rounded-lg p-3 hover:border-blue-400 hover:bg-blue-50/30 transition">
+      <div class="font-semibold text-slate-900">New Project</div>
+      <div class="text-xs text-slate-500 mt-0.5">Start monitoring</div>
+    </a>
+  </div>
+</section>
+
+<footer class="text-center text-xs text-slate-500 mt-8 mb-4">
+  Built for AI for Bharat &middot; SrotaAI &middot; <span class="font-mono">v1.2.4-stable</span>
+</footer>
+
+{% endblock %}

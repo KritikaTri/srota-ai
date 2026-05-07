@@ -1,0 +1,150 @@
+{% extends "base.html" %}
+{% import "_macros.html" as ui %}
+
+{% block content %}
+<div class="max-w-3xl">
+  <div class="mb-6">
+    <a href="/projects" class="text-sm text-slate-500 hover:text-slate-700">← All projects</a>
+    <h1 class="mt-2 text-2xl font-bold text-slate-900 tracking-tight">Create Project</h1>
+    <p class="mt-1 text-sm text-slate-500">Define keywords, sources, and a time window. Edit freely later.</p>
+  </div>
+
+  {% if error %}
+  <div class="mb-4 bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3">{{ error }}</div>
+  {% endif %}
+
+  <form method="post" action="/projects/new" id="proj-form" class="space-y-6">
+
+    <section class="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
+      <div class="text-[11px] font-bold uppercase tracking-wider text-blue-600 mb-3">Step 1 · Identity</div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <label class="block">
+          <span class="text-sm font-medium text-slate-700">Project ID</span>
+          <input name="project_id" required value="{{ form.id }}" placeholder="pv-india-otc"
+            class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:border-blue-500 font-mono"/>
+          <span class="text-[11px] text-slate-500 mt-1 block">Lowercase, dashes. Used as filename and DB key.</span>
+        </label>
+        <label class="block">
+          <span class="text-sm font-medium text-slate-700">Display name</span>
+          <input name="name" value="{{ form.name }}" placeholder="India OTC Pharmacovigilance"
+            class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:border-blue-500"/>
+        </label>
+        <label class="block md:col-span-2">
+          <span class="text-sm font-medium text-slate-700">Description</span>
+          <textarea name="description" rows="2" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:border-blue-500">{{ form.description }}</textarea>
+        </label>
+      </div>
+    </section>
+
+    <section class="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
+      <div class="text-[11px] font-bold uppercase tracking-wider text-indigo-600 mb-3">Step 2 · Scope</div>
+      <label class="block">
+        <span class="text-sm font-medium text-slate-700">Keywords <span class="text-slate-400 font-normal">(comma- or newline-separated)</span></span>
+        <textarea name="keywords" rows="3" required placeholder="paracetamol, ibuprofen, dolo&#10;rash, fever"
+          class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-mono focus:outline-none focus:border-blue-500">{{ form.keywords }}</textarea>
+        <span class="text-[11px] text-slate-500 mt-1 block">Synonym expansion runs on first execution.</span>
+      </label>
+      <label class="block mt-4 max-w-xs">
+        <span class="text-sm font-medium text-slate-700">Lookback window (days)</span>
+        <input type="number" name="lookback_days" value="{{ form.lookback_days }}" min="1" max="365"
+          class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:border-blue-500"/>
+      </label>
+      <label class="block mt-4 max-w-xs">
+        <span class="text-sm font-medium text-slate-700">Fetch cadence</span>
+        <select name="cadence" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white focus:outline-none focus:border-blue-500">
+          <option value="real_time" {% if form.cadence=='real_time' %}selected{% endif %}>Real-time · every 5 min</option>
+          <option value="daily"     {% if (form.cadence or 'daily')=='daily' %}selected{% endif %}>Daily · every 24 h</option>
+          <option value="weekly"    {% if form.cadence=='weekly' %}selected{% endif %}>Weekly · every 7 d</option>
+          <option value="manual"    {% if form.cadence=='manual' %}selected{% endif %}>Manual only</option>
+        </select>
+        <span class="text-[11px] text-slate-500 mt-1 block">Scheduler re-fetches and re-scores on this interval.</span>
+      </label>
+    </section>
+
+    <section class="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
+      <div class="flex items-center justify-between mb-3">
+        <div class="text-[11px] font-bold uppercase tracking-wider text-violet-600">Step 3 · Sources</div>
+        <button type="button" onclick="addSource()" class="text-sm font-medium text-blue-600 hover:text-blue-700">+ Add source</button>
+      </div>
+      <div id="sources-list" class="space-y-3"></div>
+      <input type="hidden" name="sources_json" id="sources_json" value="[]"/>
+      <p class="mt-3 text-[11px] text-slate-500">At least one enabled source required.</p>
+    </section>
+
+    <div class="flex items-center gap-3">
+      <button type="submit" class="bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold px-5 py-2.5 rounded-lg shadow-sm">Create &amp; Start Fetching</button>
+      <a href="/projects" class="text-sm text-slate-500 hover:text-slate-700">Cancel</a>
+    </div>
+  </form>
+</div>
+
+<template id="src-tpl">
+  <div class="src-row border border-slate-200 rounded-lg p-3 bg-slate-50/40">
+    <div class="grid grid-cols-1 md:grid-cols-12 gap-2 items-end">
+      <label class="md:col-span-3"><span class="text-xs font-medium text-slate-700">Name</span>
+        <input data-f="name" class="mt-0.5 w-full rounded border border-slate-300 px-2 py-1.5 text-sm" placeholder="reddit-india"/></label>
+      <label class="md:col-span-3"><span class="text-xs font-medium text-slate-700">Connector</span>
+        <select data-f="connector" class="mt-0.5 w-full rounded border border-slate-300 px-2 py-1.5 text-sm bg-white">
+          <option value="reddit">reddit</option>
+          <option value="rss">rss (news / FDA recalls)</option>
+          <option value="openfda">openfda (real FAERS)</option>
+          <option value="webpage">webpage (e.g. tata1mg, 1mg, drugs.com)</option>
+          <option value="x_stub">x (twitter stub)</option>
+          <option value="faers">faers (synthetic — demo only)</option>
+        </select></label>
+      <label class="md:col-span-4"><span class="text-xs font-medium text-slate-700">Params (JSON) <span class="text-[10px] text-slate-400">— or just paste a URL for webpage</span></span>
+        <input data-f="params" class="mt-0.5 w-full rounded border border-slate-300 px-2 py-1.5 text-sm font-mono" placeholder='{"subreddit":"india","limit":50}  •  https://www.1mg.com/drugs/...'/></label>
+      <label class="md:col-span-1 flex items-center gap-1 mt-5">
+        <input type="checkbox" data-f="enabled" checked class="rounded"/>
+        <span class="text-xs">on</span>
+      </label>
+      <button type="button" data-f="remove" class="md:col-span-1 text-xs text-red-600 hover:text-red-700">Remove</button>
+    </div>
+  </div>
+</template>
+
+<script>
+function gather(){
+  const rows=[...document.querySelectorAll('#sources-list .src-row')];
+  const arr=rows.map(r=>{
+    const rawParams=r.querySelector('[data-f=params]').value.trim();
+    let p={}, conn=r.querySelector('[data-f=connector]').value;
+    // Webpage shortcut: user can paste a bare URL instead of JSON.
+    if (conn === 'webpage') {
+      conn = 'html_stealth';
+      if (/^https?:\/\//i.test(rawParams)) {
+        p = {
+          url: rawParams,
+          list_selector: 'div.review-item, article, li.comment, div.user-review',
+          title_selector: 'h2, h3, p.review-text, .title',
+          body_selector:  'p, .review-text, .body, .description',
+          link_selector:  'a',
+        };
+      } else {
+        try { p = JSON.parse(rawParams || '{}'); } catch {}
+      }
+    } else {
+      try { p = JSON.parse(rawParams || '{}'); } catch {}
+    }
+    return {
+      name:r.querySelector('[data-f=name]').value.trim(),
+      connector:conn,
+      params:p,
+      latency:'daily',
+      enabled:r.querySelector('[data-f=enabled]').checked
+    };
+  }).filter(s=>s.connector);
+  document.getElementById('sources_json').value=JSON.stringify(arr);
+}
+function addSource(){
+  const t=document.getElementById('src-tpl').content.cloneNode(true);
+  const row=t.querySelector('.src-row');
+  row.querySelector('[data-f=remove]').onclick=()=>{row.remove();gather();};
+  row.querySelectorAll('input,select').forEach(i=>i.addEventListener('input',gather));
+  document.getElementById('sources-list').appendChild(row);
+  gather();
+}
+document.getElementById('proj-form').addEventListener('submit',gather);
+addSource();
+</script>
+{% endblock %}

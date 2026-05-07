@@ -1,0 +1,21 @@
+id: test6
+name: test6
+keywords:
+- fever
+- diabetics
+- ORS
+- dolo
+sources:
+- name: Health
+  connector: reddit
+  params: {}
+  latency: daily
+  time_window: null
+  time_windows: null
+  enabled: true
+description: t4esting the fever
+time_window:
+  lookback_days: 30
+  since: null
+  until: null
+time_windows: null
