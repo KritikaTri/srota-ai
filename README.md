@@ -8,8 +8,6 @@ SrotaAI continuously ingests adverse-event signals from openFDA, Reddit, RSS fee
 
 ## Quick start
 
-**Live demo:** *(deployed link goes here)*
-
 ### Run locally
 
 **Requirements:** Python 3.11 or newer, git.
