@@ -170,6 +170,8 @@ def compliance_page(request: Request):
             page_title="Compliance & Audit",
             audit=M.audit_tail(s, limit=200, full=True),
             chain_ok=ok, chain_broken_at=broken_at, chain_total=total,
+            cmp_kpis=M.compliance_kpis(s),
+            cmp_log=M.compliance_log(s, limit=14),
         )
         return templates.TemplateResponse(request, "compliance.html", ctx)
     finally:

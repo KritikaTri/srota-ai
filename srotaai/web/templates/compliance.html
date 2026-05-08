@@ -3,91 +3,160 @@
 
 {% block content %}
 <style>
-  .cmp-grid    { display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:16px; margin-bottom:24px; }
-  @media (max-width:900px){ .cmp-grid { grid-template-columns:repeat(2, minmax(0,1fr)); } }
-  @media (max-width:540px){ .cmp-grid { grid-template-columns:1fr; } }
+  /* ===== Compliance page (reference design) ===== */
+  .cmp-head    { display:flex; align-items:flex-start; justify-content:space-between;
+                 gap:16px; margin-bottom:18px; }
+  .cmp-head h1 { margin:0; font-size:22px; font-weight:700; color:#0f172a;
+                 letter-spacing:-0.01em; }
+  .cmp-head p  { margin:4px 0 0 0; font-size:13px; color:#64748b; }
 
-  .cmp-card    { background:#fff; border:1px solid #e2e8f0; border-radius:14px; box-shadow:0 1px 2px rgba(15,23,42,.04); }
-  .cmp-card-head { padding:18px 22px; border-bottom:1px solid #f1f5f9;
+  .cmp-status  { display:inline-flex; align-items:center; gap:8px;
+                 padding:9px 16px; border-radius:9999px; font-size:11px;
+                 font-weight:700; letter-spacing:0.13em; text-transform:uppercase;
+                 background:#dcfce7; color:#15803d; border:1px solid #86efac; }
+
+  .cmp-grid    { display:grid; grid-template-columns:repeat(4, minmax(0,1fr));
+                 gap:14px; margin-bottom:22px; }
+  @media (max-width:1100px){ .cmp-grid { grid-template-columns:repeat(2, minmax(0,1fr)); } }
+  @media (max-width:560px){  .cmp-grid { grid-template-columns:1fr; } }
+
+  .cmp-tile    { background:#fff; border:1px solid #e2e8f0; border-radius:12px;
+                 padding:16px 18px; box-shadow:0 1px 2px rgba(15,23,42,.04); }
+  .cmp-tile-label { font-size:10.5px; font-weight:700; letter-spacing:0.13em;
+                    text-transform:uppercase; color:#64748b; line-height:1.4; }
+  .cmp-tile-value { font-size:30px; font-weight:700; color:#0f172a;
+                    margin-top:8px; line-height:1.1; tab-size:2; font-variant-numeric:tabular-nums; }
+  .cmp-tile-value.red { color:#dc2626; }
+  .cmp-tile-foot  { margin-top:6px; font-size:11.5px; color:#475569; }
+  .cmp-tile-foot.ok { color:#15803d; font-weight:600; }
+  .cmp-tile-foot.bad{ color:#dc2626; font-weight:600; }
+
+  .cmp-pii-types { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
+  .cmp-pii-chip  { display:inline-block; padding:5px 10px; border-radius:6px;
+                   background:#f1f5f9; border:1px solid #cbd5e1; color:#334155;
+                   font-size:11px; font-weight:600;
+                   font-family:'JetBrains Mono', ui-monospace, monospace; }
+
+  .cmp-card    { background:#fff; border:1px solid #e2e8f0; border-radius:12px;
+                 box-shadow:0 1px 2px rgba(15,23,42,.04); overflow:hidden; }
+  .cmp-card-head { padding:14px 22px; border-bottom:1px solid #e2e8f0;
                    display:flex; align-items:center; justify-content:space-between; gap:12px; }
   .cmp-card-head h2 { margin:0; font-size:15px; font-weight:600; color:#0f172a; }
-  .cmp-card-head p  { margin:2px 0 0 0; font-size:12px; color:#64748b; }
-
-  .cmp-pill    { display:inline-flex; align-items:center; gap:6px; padding:5px 10px;
-                 border-radius:9999px; font-size:11px; font-weight:600; letter-spacing:.04em; }
-  .cmp-pill.ok  { background:#ecfdf5; color:#047857; border:1px solid #a7f3d0; }
-  .cmp-pill.bad { background:#fef2f2; color:#b91c1c; border:1px solid #fecaca; }
+  .cmp-layer   { font-size:10px; font-weight:700; letter-spacing:0.16em;
+                 text-transform:uppercase; color:#64748b;
+                 font-family:'JetBrains Mono', ui-monospace, monospace; }
 
   .cmp-table   { width:100%; border-collapse:collapse; font-size:13px; }
-  .cmp-table thead th { font-size:10px; font-weight:600; letter-spacing:.1em; text-transform:uppercase;
-                        color:#64748b; background:#f8fafc; padding:12px 20px; text-align:left; border-bottom:1px solid #e2e8f0; }
-  .cmp-table tbody td { padding:10px 20px; border-top:1px solid #f1f5f9; vertical-align:middle; color:#0f172a; }
+  .cmp-table thead th { font-size:10px; font-weight:700; letter-spacing:0.13em;
+                        text-transform:uppercase; color:#64748b;
+                        padding:13px 22px; text-align:left;
+                        border-bottom:1px solid #e2e8f0; background:#fafbfc; }
+  .cmp-table tbody td { padding:14px 22px; border-top:1px solid #f1f5f9;
+                        vertical-align:top; color:#0f172a; }
   .cmp-table tbody tr:hover { background:#f8fafc; }
-  .cmp-mono    { font-family:'JetBrains Mono', ui-monospace, monospace; }
-  .cmp-id      { color:#94a3b8; font-size:12px; }
-  .cmp-time    { color:#64748b; font-size:12px; }
-  .cmp-action  { font-weight:500; color:#0f172a; }
-  .cmp-trace   { color:#2563eb; font-size:12px; }
-  .cmp-hash    { color:#94a3b8; font-size:11px; letter-spacing:.02em; }
+
+  .cmp-mono    { font-family:'JetBrains Mono', ui-monospace, monospace;
+                 color:#475569; font-size:12px; white-space:nowrap; }
+
+  .cmp-act     { display:inline-block; padding:3px 9px; border-radius:6px;
+                 font-size:10.5px; font-weight:700; letter-spacing:0.08em;
+                 font-family:'JetBrains Mono', ui-monospace, monospace; }
+  .cmp-act.neutral { background:#f1f5f9; color:#334155; border:1px solid #cbd5e1; }
+  .cmp-act.ok      { background:#dcfce7; color:#15803d; border:1px solid #86efac; }
+  .cmp-act.bad     { background:#fee2e2; color:#b91c1c; border:1px solid #fca5a5; }
+  .cmp-actor   { display:block; margin-top:5px; font-size:11px; color:#64748b;
+                 font-family:'JetBrains Mono', ui-monospace, monospace; }
+
+  .cmp-subj    { font-size:13px; color:#0f172a; }
+  .cmp-obs     { font-size:12.5px; font-style:italic; color:#475569;
+                 max-width:520px; }
 
   .cmp-empty   { padding:60px 24px; text-align:center; color:#94a3b8; font-size:13px; }
+
+  /* Download report button */
+  .cmp-actions { display:flex; gap:10px; align-items:center; }
+  .cmp-dl      { display:inline-flex; align-items:center; gap:7px;
+                 padding:9px 18px; background:#fff; border:1px solid #cbd5e1;
+                 border-radius:9px; color:#0f172a; font-size:12px; font-weight:600;
+                 cursor:pointer; transition:background .15s, border-color .15s; }
+  .cmp-dl:hover{ background:#f1f5f9; border-color:#94a3b8; }
 </style>
+
+<!-- Header strip -->
+<div class="cmp-head">
+  <div>
+    <h1>Compliance &amp; Audit Trails</h1>
+    <p>Verification of data privacy and processing integrity.</p>
+  </div>
+  <span class="cmp-status">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
+    Privacy Agent Active
+  </span>
+</div>
 
 <!-- KPI strip -->
 <div class="cmp-grid">
-  {{ ui.kpi_card('Audit Events', chain_total, sub_html='Append-only · hash-chained', accent='violet') }}
-  {{ ui.kpi_card('Chain Status', 'OK' if chain_ok else 'BROKEN',
-       sub_html=('All entries verified' if chain_ok else ('Broken at #' ~ chain_broken_at)),
-       accent=('emerald' if chain_ok else 'red')) }}
-  {{ ui.kpi_card('Records Redacted', kpis.redacted,
-       sub_html=(kpis.pii_total_str ~ ' PII hits detected'), accent='blue') }}
-  {{ ui.kpi_card('Encryption', 'AES-256', sub_html='Envelope at rest', accent='indigo') }}
+
+  <div class="cmp-tile">
+    <div class="cmp-tile-label">Total Records<br/>Processed</div>
+    <div class="cmp-tile-value">{{ cmp_kpis.records_str }}</div>
+    <div class="cmp-tile-foot ok">Fields since last audit</div>
+  </div>
+
+  <div class="cmp-tile">
+    <div class="cmp-tile-label">PII / PHI Exposure<br/>Rate</div>
+    <div class="cmp-tile-value{% if cmp_kpis.pii_rate_pct >= 10 %} red{% elif cmp_kpis.pii_rate_pct > 0 %} red{% endif %}">{{ cmp_kpis.pii_rate_pct }}%</div>
+    <div class="cmp-tile-foot{% if cmp_kpis.pii_below_thresh %} ok{% else %} bad{% endif %}">
+      {% if cmp_kpis.pii_below_thresh %}BELOW 10% THRESHOLD{% else %}ABOVE 10% THRESHOLD{% endif %}
+    </div>
+  </div>
+
+  <div class="cmp-tile">
+    <div class="cmp-tile-label">Privacy Detectors<br/>Active</div>
+    <div class="cmp-pii-types">
+      {% for t in cmp_kpis.pii_types %}<span class="cmp-pii-chip">{{ t }}</span>{% endfor %}
+    </div>
+    <div class="cmp-tile-foot">Categories screened on every record</div>
+  </div>
+
+  <div class="cmp-tile">
+    <div class="cmp-tile-label">Traceability</div>
+    <div class="cmp-tile-value">{{ cmp_kpis.traceability_pct|int }}%</div>
+    <div class="cmp-tile-foot ok">Audit trail<br/>{% if chain_ok %}comprehensive{% else %}broken at #{{ chain_broken_at }}{% endif %}</div>
+  </div>
+
 </div>
 
-<!-- Audit trail -->
+<!-- Full Processing Log -->
 <section class="cmp-card">
   <header class="cmp-card-head">
-    <div>
-      <h2>Audit Trail</h2>
-      <p>Tamper-evident, hash-chained event log.</p>
-    </div>
-    {% if chain_ok %}
-      <span class="cmp-pill ok">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12l5 5L20 7"/></svg>
-        Chain verified · {{ chain_total }} events
-      </span>
-    {% else %}
-      <span class="cmp-pill bad">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 8v5M12 17h.01"/><circle cx="12" cy="12" r="9"/></svg>
-        Chain broken at #{{ chain_broken_at }}
-      </span>
-    {% endif %}
+    <h2>Full Processing Log</h2>
+    <span class="cmp-layer">Privacy Layer: PIV-V4</span>
   </header>
 
   <div style="overflow-x:auto;">
     <table class="cmp-table">
       <thead>
         <tr>
-          <th style="width:60px;">#</th>
-          <th style="width:170px;">Time</th>
-          <th>Action</th>
-          <th style="width:110px;">User</th>
-          <th style="width:170px;">Trace ID</th>
-          <th style="width:170px;">Hash</th>
+          <th style="width:200px;">Timestamp</th>
+          <th style="width:230px;">Action / Actor</th>
+          <th style="width:240px;">Subject Resource</th>
+          <th>Redacted Observation</th>
         </tr>
       </thead>
       <tbody>
-        {% for a in audit %}
+        {% for e in cmp_log %}
         <tr>
-          <td class="cmp-mono cmp-id">{{ a.id }}</td>
-          <td class="cmp-mono cmp-time">{{ a.time_full }}</td>
-          <td class="cmp-action">{{ a.action_label }}</td>
-          <td>{{ a.user }}</td>
-          <td class="cmp-mono cmp-trace">{{ a.trace }}</td>
-          <td class="cmp-mono cmp-hash">{{ a.hash_short }}</td>
+          <td class="cmp-mono">{{ e.ts }}</td>
+          <td>
+            <span class="cmp-act {{ e.tone }}">{{ e.action }}</span>
+            <span class="cmp-actor">{{ e.actor }}</span>
+          </td>
+          <td class="cmp-subj">{{ e.subject }}</td>
+          <td class="cmp-obs">{{ e.obs }}</td>
         </tr>
         {% else %}
-        <tr><td colspan="6" class="cmp-empty">No audit entries yet.</td></tr>
+        <tr><td colspan="4" class="cmp-empty">No processing events recorded yet.</td></tr>
         {% endfor %}
       </tbody>
     </table>

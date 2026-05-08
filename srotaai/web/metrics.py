@@ -51,7 +51,9 @@ def system_kpis(store: Store) -> dict[str, Any]:
     # Health buckets (24h cutoff)
     cutoff = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
     rows = c.execute(
-        """SELECT s.id, s.enabled, w.last_run_at, w.last_inserted, w.last_fetched
+        """SELECT s.id, s.enabled, w.last_run_at, w.last_inserted, w.last_fetched,
+                  (SELECT COUNT(*) FROM records r WHERE r.source_id = s.id)
+                      AS records_stored
              FROM sources s LEFT JOIN watermarks w ON w.source_id = s.id"""
     ).fetchall()
     healthy = stale = empty = idle = 0
@@ -182,22 +184,19 @@ def _classify(row: dict) -> tuple[str, str]:
     Buckets (and their UI colors):
       PAUSED   — source disabled (gray)
       PENDING  — never run yet (blue)
-      EMPTY    — ran recently, but the upstream API returned 0 records
-                 in the lookback window. Not an error — just genuinely
-                 nothing new (e.g. FAERS only publishes quarterly,
-                 RSS feeds rotate items out). (gray)
-      IDLE     — fetched > 0 but inserted = 0 (everything was duplicate)
-                 (sky)
+      EMPTY    — ran but never produced any records at all (gray)
+      IDLE     — has stored records, but last poll found nothing new
+                 (normal steady state for low-volume feeds) (sky)
       STALE    — last run > 24h ago (amber)
-      HEALTHY  — ran in last 24h, fetched > 0 AND inserted > 0 (green)
+      HEALTHY  — ran in last 24h and last poll inserted >0 records (green)
     """
     if not row.get("enabled"):
         return "PAUSED", "gray"
     if row.get("last_run_at") is None:
         return "PENDING", "blue"
 
-    fetched = row.get("last_fetched") or 0
-    inserted = row.get("last_inserted") or 0
+    inserted     = row.get("last_inserted") or 0
+    total_stored = row.get("records_stored") or 0
 
     try:
         ts = datetime.fromisoformat(row["last_run_at"].replace("Z", "+00:00"))
@@ -207,7 +206,7 @@ def _classify(row: dict) -> tuple[str, str]:
 
     if is_stale:
         return "STALE", "amber"
-    if fetched == 0:
+    if total_stored == 0:
         return "EMPTY", "gray"
     if inserted == 0:
         return "IDLE", "blue"
@@ -248,7 +247,9 @@ def source_health(store: Store, limit: int = 20) -> list[dict[str, Any]]:
     rows = store.conn.execute(
         """SELECT s.id, s.name, s.connector, s.params_json, s.latency, s.enabled,
                   s.project_id, p.name AS project_name,
-                  w.last_run_at, w.last_fetched, w.last_inserted
+                  w.last_run_at, w.last_fetched, w.last_inserted,
+                  (SELECT COUNT(*) FROM records r WHERE r.source_id = s.id)
+                      AS records_stored
              FROM sources s
              JOIN projects p ON p.id = s.project_id
              LEFT JOIN watermarks w ON w.source_id = s.id
@@ -1272,3 +1273,173 @@ def _demo_agent_lines() -> list[dict]:
 def debug_log(store: Store, limit: int = 12) -> list[dict]:
     """Connector-page debug stream — same source as agent_log, longer tail."""
     return agent_log(store, limit=limit)
+
+
+# ---------------------------------------------------------------------------
+# Compliance page — KPI block + privacy-flavoured processing log
+# ---------------------------------------------------------------------------
+_PII_KIND_LABELS = {
+    "EMAIL":    "Email",
+    "PHONE_IN": "Phone",
+    "AADHAAR":  "Aadhaar",
+    "DOB":      "DOB",
+    "MRN":      "MRN",
+    "NAME":     "Name",
+    "HOSPITAL": "Hospital",
+}
+
+_PII_TOKENS = {
+    "EMAIL":    "[REDACTED_EMAIL]",
+    "PHONE_IN": "[REDACTED_PHONE]",
+    "AADHAAR":  "[REDACTED_AADHAAR]",
+    "DOB":      "[REDACTED_DOB]",
+}
+
+
+def compliance_kpis(store: Store) -> dict[str, Any]:
+    """Top-of-page KPI block matching the reference compliance design."""
+    c = store.conn
+    n_records = c.execute("SELECT COUNT(*) FROM records").fetchone()[0]
+    n_pii_records = c.execute(
+        "SELECT COUNT(*) FROM records WHERE pii_hits_count > 0"
+    ).fetchone()[0]
+
+    pii_rate = (100.0 * n_pii_records / n_records) if n_records else 0.0
+
+    # PII types: schema scrubs raw text at ingestion, so the *kinds* of
+    # individual hits aren't recoverable from the DB. We instead surface the
+    # detector coverage — the categories the privacy layer is actively
+    # screening every record against.
+    types = ["Email", "Phone", "Aadhaar", "DOB", "MRN", "PAN"]
+
+    # Traceability: ratio of records that have at least one corresponding
+    # audit-log entry referencing their project. In our chain, every run.end
+    # references the project, so this is effectively 100% whenever the
+    # scheduler has executed at least once for the record's project. We
+    # express it as the % of records whose project has any audit entry.
+    n_traced = c.execute(
+        """SELECT COUNT(*) FROM records r
+             JOIN sources s ON s.id = r.source_id
+             WHERE EXISTS (SELECT 1 FROM audit_log a WHERE a.target = s.project_id)"""
+    ).fetchone()[0]
+    traceability_pct = (100.0 * n_traced / n_records) if n_records else 100.0
+
+    return {
+        "records_total":    n_records,
+        "records_str":      f"{n_records:,}",
+        "pii_rate_pct":     round(pii_rate, 1),
+        "pii_records":      n_pii_records,
+        "pii_below_thresh": pii_rate < 10.0,
+        "pii_types":        types,
+        "traceability_pct": round(traceability_pct, 1),
+    }
+
+
+_REDACT_PHRASES = [
+    "Patient contact via {tok} attached to record narrative.",
+    "Reporter handle masked; identifier replaced with {tok}.",
+    "Inline contact stripped: {tok} during ingestion.",
+    "Free-text PII detected and replaced with {tok}.",
+]
+
+
+def _redact_observation(seed: int, kind: str | None) -> str:
+    """Deterministic redacted-observation string for the compliance log."""
+    tok = _PII_TOKENS.get((kind or "").upper(), "[REDACTED]")
+    return _REDACT_PHRASES[seed % len(_REDACT_PHRASES)].format(tok=tok)
+
+
+def _connector_label(connector: str | None) -> str:
+    return {
+        "reddit":       "Reddit",
+        "openfda":      "openFDA",
+        "rss":          "RSS",
+        "html_stealth": "Web",
+        "x_stub":       "X",
+        "whatsapp":     "WhatsApp",
+    }.get((connector or "").lower(), (connector or "Source").title())
+
+
+def compliance_log(store: Store, limit: int = 12) -> list[dict]:
+    """Privacy-flavoured processing log shown on /compliance.
+
+    Mixes three real event streams into a single chronological table:
+      * Records with PII hits      → DATA_REDACTION    / RedactionEngine_v2
+      * Signals computed runs      → SIGNAL_TRIAGE     / signal_job
+      * Source error audit entries → CONNECTOR_FAILURE / SystemWatcher
+    """
+    c = store.conn
+    events: list[tuple[str, dict]] = []   # (sortable_ts, row_dict)
+
+    # Real PII redactions — stored text is already scrubbed so we can't
+    # recover kinds; log the count and the source/record reference.
+    pii_rows = c.execute(
+        """SELECT r.id, r.ingested_at, s.connector, s.name AS src_name,
+                  r.pii_hits_count
+             FROM records r
+             JOIN sources s ON s.id = r.source_id
+             WHERE r.pii_hits_count > 0
+             ORDER BY r.ingested_at DESC LIMIT ?""", (limit,)
+    ).fetchall()
+    for r in pii_rows:
+        n = int(r["pii_hits_count"] or 0)
+        events.append((r["ingested_at"] or "", {
+            "ts":      (r["ingested_at"] or "")[:19].replace("T", " "),
+            "action":  "DATA_REDACTION",
+            "actor":   "RedactionEngine_v2",
+            "subject": f"Record #{r['id']} ({_connector_label(r['connector'])})",
+            "obs":     (f"{n} PII token{'s' if n != 1 else ''} stripped at "
+                        f"ingestion; raw text discarded."),
+            "tone":    "neutral",
+        }))
+
+    # Signal triage events — only surface runs that *did* flag something,
+    # otherwise every row reads "0 of N" which is noisy.
+    sig_rows = c.execute(
+        """SELECT id, ts, target, payload_json FROM audit_log
+            WHERE action = 'signals.computed'
+            ORDER BY id DESC LIMIT ?""", (limit * 4,)
+    ).fetchall()
+    for r in sig_rows:
+        try:
+            p = json.loads(r["payload_json"] or "{}")
+        except Exception:
+            p = {}
+        flagged = int(p.get("flagged", 0) or 0)
+        rows_n  = int(p.get("rows", 0) or 0)
+        if flagged <= 0:
+            continue   # skip empty triage runs
+        sig_id  = f"Sig-{r['id'] % 1000:03d}"
+        events.append((r["ts"], {
+            "ts":      (r["ts"] or "")[:19].replace("T", " "),
+            "action":  "SIGNAL_TRIAGE",
+            "actor":   "signal_job",
+            "subject": f"{sig_id} ({(r['target'] or '').title() or 'Project'})",
+            "obs":     (f"{flagged} signal(s) flagged of {rows_n} pair(s) "
+                        f"considered."),
+            "tone":    "ok",
+        }))
+
+    # Connector failures
+    err_rows = c.execute(
+        """SELECT id, ts, target, payload_json FROM audit_log
+            WHERE action = 'source.error'
+            ORDER BY id DESC LIMIT ?""", (limit,)
+    ).fetchall()
+    for r in err_rows:
+        try:
+            p = json.loads(r["payload_json"] or "{}")
+        except Exception:
+            p = {}
+        err = (p.get("error") or "Connector raised an unhandled exception.")[:160]
+        events.append((r["ts"], {
+            "ts":      (r["ts"] or "")[:19].replace("T", " "),
+            "action":  "CONNECTOR_FAILURE",
+            "actor":   "SystemWatcher",
+            "subject": f"{(r['target'] or 'source').title()}",
+            "obs":     err,
+            "tone":    "bad",
+        }))
+
+    events.sort(key=lambda x: x[0], reverse=True)
+    return [e[1] for e in events[:limit]]

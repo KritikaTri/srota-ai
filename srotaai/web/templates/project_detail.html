@@ -125,8 +125,8 @@
           <th class="px-5 py-2.5 text-left">Connector</th>
           <th class="px-5 py-2.5 text-left">Status</th>
           <th class="px-5 py-2.5 text-left">Last run</th>
-          <th class="px-5 py-2.5 text-right">Fetched</th>
-          <th class="px-5 py-2.5 text-right">Inserted</th>
+          <th class="px-5 py-2.5 text-right" title="Total records ever ingested from this source">Records</th>
+          <th class="px-5 py-2.5 text-right" title="Records inserted on the most recent poll">Last poll</th>
           <th class="px-5 py-2.5 text-right">Latency</th>
         </tr>
       </thead>
@@ -137,8 +137,8 @@
           <td class="px-5 py-3 font-mono text-xs">{{ s.connector }}</td>
           <td class="px-5 py-3">{{ ui.pill(s.status, s.status_color) }}</td>
           <td class="px-5 py-3 text-xs text-slate-500 font-mono">{{ s.last_run_at[:19] if s.last_run_at else '—' }}</td>
-          <td class="px-5 py-3 text-right tabular-nums">{{ s.last_fetched or 0 }}</td>
-          <td class="px-5 py-3 text-right tabular-nums">{{ s.last_inserted or 0 }}</td>
+          <td class="px-5 py-3 text-right tabular-nums font-semibold">{{ s.records_stored or 0 }}</td>
+          <td class="px-5 py-3 text-right tabular-nums text-slate-500">+{{ s.last_inserted or 0 }}</td>
           <td class="px-5 py-3 text-right tabular-nums">{{ s.latency_ms }}</td>
         </tr>
       {% else %}
