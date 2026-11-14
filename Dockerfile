@@ -6,11 +6,12 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy source
+# Copy source and use the committed seed DB as the runtime DB
 COPY . .
-
-# Use the committed seed DB as the runtime DB
-RUN cp srotaai_seed.db srotaai.db
+RUN cp srotaai_seed.db srotaai.db \
+    && useradd --create-home --uid 10001 app \
+    && chown -R app:app /app
+USER app
 
 ENV PORT=8000
 EXPOSE 8000

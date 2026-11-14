@@ -13,9 +13,12 @@ shape can absorb a real proxy pool in production without changing callers.
 """
 from __future__ import annotations
 
+import ipaddress
 import os
 import random
+import socket
 import time
+from urllib.parse import urljoin, urlparse
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -47,6 +50,33 @@ class FetchResult:
 
 
 # ---------------------------------------------------------------------------
+# SSRF guard — project sources take user-supplied URLs that this server fetches,
+# so refuse anything that resolves to a private / loopback / link-local /
+# cloud-metadata address. Set SROTAAI_ALLOW_PRIVATE_URLS=1 to disable (local dev).
+# ---------------------------------------------------------------------------
+class UnsafeURLError(ValueError):
+    """Raised when a URL targets a non-public network location."""
+
+
+def assert_public_url(url: str) -> None:
+    if os.environ.get("SROTAAI_ALLOW_PRIVATE_URLS") == "1":
+        return
+    parts = urlparse(url)
+    if parts.scheme not in ("http", "https") or not parts.hostname:
+        raise UnsafeURLError(f"only http(s) URLs with a host are allowed: {url!r}")
+    try:
+        infos = socket.getaddrinfo(parts.hostname, parts.port or 443,
+                                   proto=socket.IPPROTO_TCP)
+    except socket.gaierror as e:
+        raise UnsafeURLError(f"cannot resolve host {parts.hostname!r}: {e}") from e
+    for info in infos:
+        ip = ipaddress.ip_address(info[4][0])
+        if not ip.is_global:
+            raise UnsafeURLError(
+                f"{parts.hostname!r} resolves to non-public address {ip}")
+
+
+# ---------------------------------------------------------------------------
 # Rungs
 # ---------------------------------------------------------------------------
 def _rung_requests(url: str, timeout: float) -> tuple[int, str]:
@@ -57,8 +87,16 @@ def _rung_requests(url: str, timeout: float) -> tuple[int, str]:
         "Accept-Encoding": "gzip, deflate, br",
         "Cache-Control": "no-cache",
     }
-    r = requests.get(url, headers=headers, timeout=timeout, allow_redirects=True)
-    return r.status_code, r.text
+    # Follow redirects by hand so every hop is re-validated by the SSRF guard.
+    for _ in range(5):
+        r = requests.get(url, headers=headers, timeout=timeout,
+                         allow_redirects=False)
+        if r.is_redirect and r.headers.get("Location"):
+            url = urljoin(url, r.headers["Location"])
+            assert_public_url(url)
+            continue
+        return r.status_code, r.text
+    return 310, ""   # too many redirects
 
 
 def _rung_curl_cffi(url: str, timeout: float) -> tuple[int, str]:
@@ -96,6 +134,11 @@ def fetch(url: str, timeout: float = 20.0,
     chosen = [(n, fn) for (n, fn) in RUNGS if (rungs is None or n in rungs)]
     res = FetchResult(url=url)
     t0 = time.time()
+    try:
+        assert_public_url(url)
+    except UnsafeURLError as e:
+        res.error = f"blocked: {e}"
+        return res
     for name, fn in chosen:
         a: dict = {"rung": name}
         t = time.time()

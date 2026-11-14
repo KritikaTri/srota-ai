@@ -7,7 +7,7 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: "3.11"
-    disk:
-      name: srotaai-data
-      mountPath: /opt/render/project/src
-      sizeGB: 1
+    # NOTE: no persistent disk. The previous config mounted a disk at the
+    # project root, which hides the deployed source. The demo DB is rebuilt
+    # from srotaai_seed.db on every deploy; add a disk only after moving
+    # DB_PATH (srotaai/web/app.py) to a dedicated mount such as /var/data.

@@ -25,3 +25,7 @@ archive/
 # data/ is gitignored but ship the X demo fixture
 data/*
 !data/x_fixture.json
+
+# Test / tooling caches
+.pytest_cache/
+.ruff_cache/
