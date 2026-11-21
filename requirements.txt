@@ -1,32 +1,27 @@
-# Spike-only dependencies. Throwaway.
-requests>=2.31
-feedparser>=6.0
-pandas>=2.2
-beautifulsoup4>=4.12
-lxml>=5.0
-python-dateutil>=2.9
-# Spike 1
-praw>=7.7
-# Spike 2 (agent) — uses OpenAI-compatible endpoint
-openai>=1.30
-# Spike 4 (NER) — install lazily; spaCy + scispaCy is heavy
-# pip install spacy && python -m spacy download en_core_web_sm
+# Runtime dependencies for the SrotaAI app (web UI, connectors, scheduler).
+# Optional extras are listed in comments at the bottom.
 
-# Web stack (FastAPI + Uvicorn)
+# Web stack
 fastapi>=0.115
 uvicorn[standard]>=0.34
 jinja2>=3.1
 python-multipart>=0.0.9
 
-# Phase 2 (prototype)
+# Ingestion / parsing
+requests>=2.31
+feedparser>=6.0
+beautifulsoup4>=4.12
+lxml>=5.0
+python-dateutil>=2.9
 pyyaml>=6.0
-fpdf2>=2.7
-markdown>=3.5
-pypdf>=4.0
-faker>=24.0
-streamlit>=1.40
-altair>=5.0
 apscheduler>=3.10
-# Optional retry-ladder rungs:
+
+# Connectors / agentic features that import lazily (app runs without keys)
+praw>=7.7        # authenticated Reddit (falls back to public JSON without creds)
+openai>=1.30     # LLM synonym / misspelling expansion (any OpenAI-compatible endpoint)
+
+# Optional retry-ladder rungs (see srotaai/fetch.py):
 # curl_cffi>=0.7        # TLS-impersonation fetcher
 # playwright>=1.45      # full headless browser; needs `playwright install chromium`
+# Optional NER upgrade:
+# spacy>=3.7 && python -m spacy download en_core_web_sm

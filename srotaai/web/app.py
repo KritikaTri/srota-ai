@@ -9,6 +9,7 @@ import csv
 import io
 import json
 import os
+import logging
 import re
 import shutil
 from pathlib import Path
@@ -28,7 +29,9 @@ from srotaai.audit import verify as audit_verify
 from srotaai.web import metrics as M
 from srotaai import connectors_extra  # noqa: F401  -- registers connectors
 from srotaai.scheduler import SrotaScheduler
+from srotaai.fetch import assert_public_url, UnsafeURLError
 
+log = logging.getLogger("srotaai.web")
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 WEB_DIR = Path(__file__).resolve().parent
@@ -93,7 +96,8 @@ def _start_scheduler() -> None:
     try:
         SrotaScheduler.get(DB_PATH).start()
     except Exception:
-        pass  # Don't block app startup if scheduler fails
+        # Don't block app startup if the scheduler fails, but don't hide it.
+        log.exception("scheduler failed to start; ingestion will be manual-only")
 
 
 @app.on_event("shutdown")
@@ -102,7 +106,7 @@ def _stop_scheduler() -> None:
         s = SrotaScheduler.get(DB_PATH)
         s.stop()
     except Exception:
-        pass
+        log.exception("scheduler failed to stop cleanly")
 
 
 def _common(active: str, store) -> dict:
@@ -126,7 +130,6 @@ def _ping():
         '<p>If you can read this, the server is healthy.</p>'
         '<p><a href="/">→ Go to System Overview</a></p>'
         '<p><a href="/signals">→ Go to Signal Triage Hub</a></p>'
-        '<p><a href="/signals/531">→ Go to SIG-531 metformin × lactic acidosis</a></p>'
         '</body></html>'
     )
 
@@ -485,6 +488,10 @@ def project_add_source(pid: str,
         safe_name = re.sub(r"[^a-z0-9_-]+", "-", name.strip().lower()).strip("-")
         if not safe_name:
             raise HTTPException(400, "Invalid source name")
+        try:
+            assert_public_url(url.strip())
+        except UnsafeURLError as e:
+            raise HTTPException(400, f"URL not allowed: {e}")
         # html_stealth pulls the page and yields review/comment-like blocks.
         # Default selectors are heuristic — the page can override later.
         new_src = SourceConfig(

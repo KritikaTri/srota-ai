@@ -5,6 +5,35 @@
 
 SrotaAI continuously ingests adverse-event signals from openFDA, Reddit, RSS feeds, and patient-review sites; runs PRR / χ² / IC disproportionality math with MHRA thresholds; and surfaces tier-coded signals through a FastAPI dashboard. Every action is recorded in a tamper-evident hash-chained audit log.
 
+[![CI](https://github.com/KritikaTri/srota-ai/actions/workflows/ci.yml/badge.svg)](https://github.com/KritikaTri/srota-ai/actions/workflows/ci.yml)
+
+## Architecture
+
+```mermaid
+flowchart LR
+    subgraph Sources
+        R[Reddit]
+        F[openFDA / FAERS]
+        RSS[RSS feeds]
+        H[Any HTML page<br/>CSS selectors]
+        W[WhatsApp / X<br/>fixture-driven]
+    end
+    Sources --> C[Connector registry<br/>+ fetch retry ladder]
+    S[Scheduler<br/>real-time / daily / weekly] --> RUN
+    C --> RUN[Runner<br/>watermark + dedupe]
+    RUN --> PII[PII redaction<br/>phone, Aadhaar, PAN, ...]
+    PII --> ENR[NER + sentiment<br/>India-locale drug synonyms]
+    ENR --> DB[(SQLite store)]
+    DB --> SIG[Signal job<br/>PRR / chi-square / IC]
+    SIG --> DB
+    DB --> UI[FastAPI dashboard<br/>signals, projects, compliance]
+    RUN -.->|every action| AUD[(Hash-chained audit log)]
+    SIG -.-> AUD
+    UI -.-> AUD
+```
+
+A **project** (YAML or the onboarding UI) bundles keywords, sources and per-source latency. New sources need no code: add a block to the project, or point the `html_stealth` connector at any URL.
+
 ---
 
 ## Quick start
@@ -115,8 +144,27 @@ deployment directory.
 | `srotaai/connectors_extra.py`   | `html_stealth`, `openfda`, real Reddit, X-stub. Auto-registers into the connector REGISTRY |
 | `srotaai/ner.py` / `pii.py`     | India-locale NER (Crocin → paracetamol …) and PII redaction (phone, Aadhaar, PAN, …) |
 | `srotaai/ml/`                   | ADE classifier and CRF entity training/evaluation; licensed corpora and model artifacts stay out of Git |
+| `tests/`                        | pytest suite: signal math, PII, audit chain, SSRF guard, route smoke tests (`pytest -q`) |
 | `spikes/`                       | Round-1 spike scripts. `spike1_connectors.py` is **imported at runtime** as the connector registry — do not delete |
 | `projects/pv-india-otc.yaml`    | Live demo project: openFDA, Reddit, FDA Recalls RSS, 1mg reviews |
+
+---
+
+## Tests
+
+```bash
+pip install -r requirements-dev.txt
+pytest -q
+```
+
+CI runs the suite on Python 3.11 and 3.12 and verifies the audit chain of the committed seed DB (`python -m srotaai.audit srotaai_seed.db`).
+
+---
+
+## Security notes
+
+- **SSRF guard.** Sources take user-supplied URLs that the server fetches. `srotaai/fetch.py` rejects non-http(s) schemes and any host that resolves to a private, loopback, link-local or cloud-metadata address, and re-checks every redirect hop. Set `SROTAAI_ALLOW_PRIVATE_URLS=1` for local development against internal hosts.
+- **The dashboard has no authentication.** Anyone who can reach it can create, run or delete projects. Treat the public demo as read-mostly and do not point it at real patient data.
 
 ---
 
@@ -180,6 +228,6 @@ For new independent gold data and drug–event relation annotations, follow
 
 ## Notes for judges
 
-- All adverse-event data is **real** (openFDA + Reddit). No synthetic rows in the live DB.
+- The committed seed DB holds **real** records only (openFDA/FAERS + Reddit); the synthetic demo connector is not used in it.
 - Audit chain serializes via `BEGIN IMMEDIATE` so concurrent writers can't fork the chain.
 - HTML responses send `Cache-Control: no-store`; CSS is cache-busted with a build-id; use Chrome / Edge incognito for the cleanest demo (VS Code Simple Browser caches aggressively).
