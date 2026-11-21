@@ -92,7 +92,7 @@ resource "aws_cloudwatch_log_group" "app" {
 }
 
 resource "aws_iam_role" "ssm" {
-  name_prefix        = "srotaai-ec2-ssm-"
+  name_prefix = "srotaai-ec2-ssm-"
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
@@ -114,8 +114,8 @@ resource "aws_iam_role_policy" "cloudwatch_logs" {
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Effect = "Allow"
-      Action = ["logs:CreateLogStream", "logs:PutLogEvents", "logs:DescribeLogStreams"]
+      Effect   = "Allow"
+      Action   = ["logs:CreateLogStream", "logs:PutLogEvents", "logs:DescribeLogStreams"]
       Resource = "${aws_cloudwatch_log_group.app.arn}:*"
     }]
   })
