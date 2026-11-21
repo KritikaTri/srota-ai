@@ -1,0 +1,6 @@
+-r requirements.txt
+pytest>=8.0
+httpx>=0.27          # FastAPI TestClient
+faker>=24.0          # PII evaluation set (python -m srotaai.pii eval)
+python-pptx>=1.0     # build_pitch_deck.py
+python-dotenv>=1.0   # spikes/
