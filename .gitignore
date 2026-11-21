@@ -25,3 +25,12 @@ archive/
 # data/ is gitignored but ship the X demo fixture
 data/*
 !data/x_fixture.json
+data/ml/
+models/
+terraform.tfstate
+terraform.tfstate.backup
+*.tfstate
+*.tfstate.*
+.terraform/
+crash.log
+terraform.tfvars

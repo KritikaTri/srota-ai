@@ -347,6 +347,13 @@ def project_counts(store: Store, pid: str) -> dict[str, Any]:
                AND r.matched_keywords_json != '[]'""",
         (pid,)
     ).fetchone()[0]
+    ml_row = c.execute(
+        """SELECT COUNT(ml_ade_probability) AS scored,
+                  SUM(CASE WHEN ml_ade_label='ade' THEN 1 ELSE 0 END) AS flagged,
+                  MAX(ml_model_version) AS model_version
+             FROM records r JOIN sources s ON s.id=r.source_id
+             WHERE s.project_id=?""", (pid,)
+    ).fetchone()
     return {
         "records":         n_rec,
         "entities":        n_entities,
@@ -355,6 +362,9 @@ def project_counts(store: Store, pid: str) -> dict[str, Any]:
         "flagged":         flagged,
         "latest_signals_ts": latest_ts,
         "last_run":        last_run,
+        "ml_scored":       ml_row["scored"] or 0,
+        "ml_flagged":      ml_row["flagged"] or 0,
+        "ml_model_version": ml_row["model_version"],
     }
 
 
@@ -523,7 +533,7 @@ def signal_detail(store: Store, sig_id: int) -> dict | None:
     Returns None if signal not found.
     """
     row = store.conn.execute(
-        """SELECT id, project_id, drug, event, n, prr, chi2, ic, computed_at,
+        """SELECT id, project_id, drug, event, n, prr, ror, chi2, ic, computed_at,
                   window_since, window_until
              FROM signals WHERE id=?""",
         (sig_id,),
@@ -536,17 +546,8 @@ def signal_detail(store: Store, sig_id: int) -> dict | None:
     drug_l = row["drug"].lower()
     event_l = row["event"].lower()
 
-    # ---- 2x2 contingency matrix ----------------------------------------
-    # Mirror signals.py._compute() EXACTLY so the numbers reconcile with the
-    # stored PRR/χ²/IC/n that the Triage Hub displays. Methodology:
-    #   1. Iterate adverse/negative records (sentiment filter).
-    #   2. Run NER, collect ALL (drug, event) pairs (multiplicity counted).
-    #   3. Build the 2x2 from the pair-Counter, where N = total pairs.
-    #   4. Haldane–Anscombe correction (+0.5) when any cell is 0.
-    #   5. PRR / χ² / IC derived from the corrected cells.
+    # ---- report-level 2x2 contingency matrix ---------------------------
     from srotaai import ner as _ner_mod        # lazy (avoid circular)
-    from srotaai import sentiment as _sent_mod
-    from collections import Counter as _Counter
 
     rows = store.conn.execute(
         """SELECT r.id, r.text_redacted, r.sentiment_label
@@ -555,47 +556,29 @@ def signal_detail(store: Store, sig_id: int) -> dict | None:
         (pid,),
     ).fetchall()
 
-    pairs: list[tuple[str, str]] = []
+    reports: list[tuple[set[str], set[str], set[tuple[str, str]]]] = []
     pair_to_record_ids: dict[tuple[str, str], list[int]] = {}
     for r in rows:
-        # mirror signals.run() filter: only adverse/negative records count
-        slbl = r["sentiment_label"]
-        if slbl not in ("adverse", "negative"):
-            # If sentiment_label was never persisted, fall back to runtime
-            # sentiment so old records aren't silently skipped.
-            if slbl in (None, ""):
-                try:
-                    if _sent_mod.analyze(r["text_redacted"] or "").label \
-                            not in ("adverse", "negative"):
-                        continue
-                except Exception:
-                    continue
-            else:
-                continue
         text = r["text_redacted"] or ""
         try:
             ner_res = _ner_mod.extract(text)
         except Exception:
+            reports.append((set(), set(), set()))
             continue
-        # Mirror signals.py: dedupe pairs within a single record so n
-        # reflects distinct contributing records, not raw co-occurrence.
-        for (dp, ev) in set(ner_res.drug_event_pairs or []):
-            dp_l, ev_l = (dp or "").lower(), (ev or "").lower()
-            if not dp_l or not ev_l:
-                continue
-            pairs.append((dp_l, ev_l))
-            if dp_l == drug_l and ev_l == event_l:
-                pair_to_record_ids.setdefault((dp_l, ev_l), []).append(r["id"])
+        drugs = {e.normalized or e.text.lower() for e in ner_res.drugs}
+        pairs = {(d, ev) for d, ev in ner_res.drug_event_pairs}
+        events = {ev for _, ev in pairs}
+        reports.append((drugs, events, pairs))
+        if (drug_l, event_l) in pairs:
+            pair_to_record_ids.setdefault((drug_l, event_l), []).append(r["id"])
 
-    # Same Counter math as signals._compute()
-    drug_event = _Counter(pairs)
-    drug_total = _Counter(d_ for d_, _ in pairs)
-    event_total = _Counter(e_ for _, e_ in pairs)
-    N = len(pairs)
-    a = drug_event.get((drug_l, event_l), 0)
-    b = drug_total.get(drug_l, 0) - a
-    c = event_total.get(event_l, 0) - a
-    d = max(0, N - a - b - c)
+    # Every project report is the denominator, including reports that contain
+    # neither this drug nor this event.
+    population_rows = len(rows)
+    a = sum((drug_l, event_l) in ps for _, _, ps in reports)
+    b = sum(drug_l in ds and event_l not in es for ds, es, _ in reports)
+    c = sum(drug_l not in ds and event_l in es for ds, es, _ in reports)
+    d = max(0, population_rows - a - b - c)
     contributing_ids = list(dict.fromkeys(
         pair_to_record_ids.get((drug_l, event_l), [])
     ))
@@ -611,11 +594,10 @@ def signal_detail(store: Store, sig_id: int) -> dict | None:
 
     prr = _safe_div(_safe_div(a_, a_ + b_), _safe_div(c_, c_ + d_) or 1e-9)
     ror = _safe_div(a_ * d_, b_ * c_)
-    expected_a = (a + b) * (a + c) / N if N else 1
-    yates_chi2 = (
-        ((max(0.0, abs(a - expected_a) - 0.5)) ** 2) / expected_a
-        if expected_a else 0.0
-    )
+    expected_a = (a + b) * (a + c) / population_rows if population_rows else 0
+    denom = (a + b) * (c + d) * (a + c) * (b + d)
+    yates_chi2 = (population_rows * max(0.0, abs(a*d - b*c) - population_rows/2) ** 2 / denom
+                  if denom else 0.0)
     ic = math.log2((a + 0.5) / (expected_a + 0.5)) \
         if (expected_a + 0.5) > 0 else 0.0
 
@@ -623,6 +605,7 @@ def signal_detail(store: Store, sig_id: int) -> dict | None:
     # the Triage Hub and the Investigation Workspace agree byte-for-byte.
     # The recomputed values above feed the contingency / ROR display.
     stored_prr  = float(row["prr"])  if row["prr"]  is not None else prr
+    stored_ror  = float(row["ror"])  if row["ror"]  is not None else ror
     stored_chi2 = float(row["chi2"]) if row["chi2"] is not None else yates_chi2
     stored_ic   = float(row["ic"])   if row["ic"]   is not None else ic
     stored_n    = int(row["n"])      if row["n"]    is not None else a
@@ -630,6 +613,7 @@ def signal_detail(store: Store, sig_id: int) -> dict | None:
     # Surface stored values to the rest of this function (strength label,
     # quality warning, etc. all derive from them).
     prr        = stored_prr
+    ror        = stored_ror
     yates_chi2 = stored_chi2
     ic         = stored_ic
     a          = stored_n  # so "total_mentions" matches Triage Hub n

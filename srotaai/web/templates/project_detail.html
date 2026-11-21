@@ -27,6 +27,10 @@
     </div>
   </div>
   <div class="flex items-center gap-2 shrink-0">
+    {% if not read_only_demo %}
+    <form method="post" action="/projects/{{ project.id }}/run">
+      <button class="text-sm font-semibold px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white">Run now</button>
+    </form>
     {% if status == 'running' %}
     <form method="post" action="/projects/{{ project.id }}/pause">
       <button class="text-sm font-semibold px-3 py-2 rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-100">Pause</button>
@@ -41,15 +45,24 @@
       <button class="text-sm font-semibold px-3 py-2 rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-100">Close</button>
     </form>
     {% endif %}
+    {% endif %}
     <a href="/projects/{{ project.id }}/records.csv" class="inline-flex items-center gap-1.5 bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold px-3.5 py-2 rounded-lg shadow-sm">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 3v12m0 0-4-4m4 4 4-4M5 21h14"/></svg>
       Download CSV
     </a>
+    {% if not read_only_demo %}
     <form method="post" action="/projects/{{ project.id }}/delete" onsubmit="return confirm('Delete this project? Records & signals are kept for audit.')">
       <button class="text-slate-400 hover:text-red-600 text-sm px-2 py-2">Delete</button>
     </form>
+    {% endif %}
   </div>
 </div>
+
+{% if project.last_run_error %}
+<div role="alert" class="mb-5 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+  <strong>Last run failed.</strong> {{ project.last_run_error }}
+</div>
+{% endif %}
 
 <!-- Counts strip -->
 <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
@@ -88,6 +101,20 @@
         '<svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="white" stroke-width="1.5"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>',
         'red'),
   ]) }}
+
+  <section class="mt-5 rounded-xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <h2 class="font-semibold text-slate-900">ADE ML screening</h2>
+        {% if counts.ml_model_version %}
+        <p class="mt-1 text-xs text-slate-600">Model {{ counts.ml_model_version }} · {{ counts.ml_scored }} records scored · {{ counts.ml_flagged }} above threshold</p>
+        {% else %}
+        <p class="mt-1 text-xs text-amber-700">No trained classifier loaded. Current rows use the rules baseline; ML scores are intentionally blank.</p>
+        {% endif %}
+      </div>
+      <a href="/projects/{{ project.id }}/records.csv" class="text-sm font-semibold text-blue-700 hover:text-blue-900">Inspect predictions in CSV →</a>
+    </div>
+  </section>
 
   <section class="mt-6 bg-white border border-slate-200 rounded-xl shadow-sm">
     <header class="px-5 py-4 border-b border-slate-100 flex items-center justify-between">

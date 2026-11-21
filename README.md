@@ -1,6 +1,6 @@
 # SrotaAI — Real-Time Pharmacovigilance for India
 
-**Live Website - https://srotaai-509750593944.asia-south1.run.app/**
+**Existing hosted demo (Cloud Run; returning 503 at last check): https://srotaai-509750593944.asia-south1.run.app/**
 **AI for Bharat 2026 · Theme 6 — Real-Time Social Listening for Patient Safety Signals.**
 
 SrotaAI continuously ingests adverse-event signals from openFDA, Reddit, RSS feeds, and patient-review sites; runs PRR / χ² / IC disproportionality math with MHRA thresholds; and surfaces tier-coded signals through a FastAPI dashboard. Every action is recorded in a tamper-evident hash-chained audit log.
@@ -74,6 +74,17 @@ cp srotaai_seed.db srotaai.db     # Linux/macOS
 python -m uvicorn srotaai.web.app:app --host 0.0.0.0 --port 8001
 ```
 
+### Public AWS EC2 demo
+
+For a public read-only portfolio deployment, use the Terraform stack in
+[`deploy/aws-ec2`](deploy/aws-ec2/README.md). It creates a public EC2 instance,
+dedicated VPC, Systems Manager access, CloudWatch logs/alarms, builds the Docker
+image, and serves the seeded dashboard. GitHub Actions validates Terraform on
+infrastructure changes. **AWS resources are billable**; the guide includes
+security boundaries, costs, troubleshooting, and `terraform destroy` cleanup
+steps. No AWS resources are created until you run `terraform apply` in that
+deployment directory.
+
 ### Troubleshooting
 
 | Problem | Fix |
@@ -83,6 +94,7 @@ python -m uvicorn srotaai.web.app:app --host 0.0.0.0 --port 8001
 | `python3: command not found` (Linux/macOS) | Install Python 3.11+ from [python.org](https://python.org) or your package manager (`brew install python@3.11`, `apt install python3.11`). |
 | `port 8001 already in use` | Stop the existing server (`./run.sh stop` / `run.bat stop`), or pick a new port: `PORT=9000 ./run.sh` (Linux/macOS) / `set PORT=9000 && run.bat` (Windows). |
 | `pip install` fails on `lxml` / `cryptography` | Linux: `sudo apt install build-essential python3-dev`. macOS: `xcode-select --install`. Windows: install [Visual C++ Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/). |
+| Hosted demo says “503 Server Error” | Cloud Run has no ready instance/revision. Run locally at `http://localhost:8001`; deployment logs and the active Google Cloud project are needed to restore the hosted URL. |
 | Page is blank / CSS broken | Hard-refresh (Ctrl+Shift+R / Cmd+Shift+R). |
 | Nothing works at all | Try the **Docker** path — it sidesteps every Python/PATH issue. |
 
@@ -102,6 +114,7 @@ python -m uvicorn srotaai.web.app:app --host 0.0.0.0 --port 8001
 | `srotaai/audit.py`              | `python -m srotaai.audit <db>` — verifies the Merkle-chained audit log |
 | `srotaai/connectors_extra.py`   | `html_stealth`, `openfda`, real Reddit, X-stub. Auto-registers into the connector REGISTRY |
 | `srotaai/ner.py` / `pii.py`     | India-locale NER (Crocin → paracetamol …) and PII redaction (phone, Aadhaar, PAN, …) |
+| `srotaai/ml/`                   | ADE classifier and CRF entity training/evaluation; licensed corpora and model artifacts stay out of Git |
 | `spikes/`                       | Round-1 spike scripts. `spike1_connectors.py` is **imported at runtime** as the connector registry — do not delete |
 | `projects/pv-india-otc.yaml`    | Live demo project: openFDA, Reddit, FDA Recalls RSS, 1mg reviews |
 
@@ -144,6 +157,24 @@ sources:
 ```
 
 Restart the server and records flow through the same ingestion → NER → PRR → audit pipeline.
+
+### Optional learned ADE models
+
+The repository ships training code for a supervised ADE classifier and CRF
+entity tagger. Relation assertion remains a rules-based fallback until
+drug–event relations have human labels. Install the lightweight dependencies
+with `pip install scikit-learn scikit-learn-crfsuite joblib`, follow
+[`srotaai/ml/README.md`](srotaai/ml/README.md), and prepare licensed,
+human-annotated data. Ingestion stores classifier
+probability, label, and model version when a trained classifier artifact is
+present; without one, the ML fields remain empty. The optional BioBERT trainer
+requires the heavyweight PyTorch/Transformers stack described in
+`requirements-ml.txt`.
+
+The first local benchmark and its caveats are recorded in
+[`srotaai/ml/experiment_2026-11-15.md`](srotaai/ml/experiment_2026-11-15.md).
+For new independent gold data and drug–event relation annotations, follow
+[`srotaai/ml/annotation/README.md`](srotaai/ml/annotation/README.md).
 
 ---
 

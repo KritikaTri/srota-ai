@@ -106,7 +106,8 @@ set /a tries=0
 :waitloop
 set /a tries+=1
 timeout /t 1 /nobreak >nul
-curl -s -o NUL "http://127.0.0.1:%PORT%/" >nul 2>nul
+REM --fail is important: curl otherwise treats HTTP 503 as a successful request.
+curl --fail --silent --show-error --max-time 2 -o NUL "http://127.0.0.1:%PORT%/healthz" >nul 2>nul
 if %errorlevel% equ 0 goto :ready
 if %tries% lss 10 goto :waitloop
 

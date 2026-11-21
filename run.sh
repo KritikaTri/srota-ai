@@ -114,7 +114,11 @@ _start() {
 
     for _ in 1 2 3 4 5 6 7 8 9 10; do
         sleep 1
-        if curl -s -o /dev/null "http://127.0.0.1:$PORT/" 2>/dev/null; then
+        # `curl` returns success for HTTP 503 unless --fail is used. Probe the
+        # dedicated readiness route so a bad response is never reported as a
+        # successful launch.
+        if curl --fail --silent --show-error --max-time 2 \
+            -o /dev/null "http://127.0.0.1:$PORT/healthz" 2>/dev/null; then
             echo ""
             echo "============================================================"
             echo "  SrotaAI is running"

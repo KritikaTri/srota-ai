@@ -1,0 +1,25 @@
+#!/bin/bash
+set -euo pipefail
+exec > >(tee -a /var/log/srotaai-bootstrap.log | logger -t srotaai-bootstrap -s 2>/dev/console) 2>&1
+
+dnf update -y
+dnf install -y docker git curl
+systemctl enable --now docker
+
+git clone --depth 1 --branch '${repo_branch}' '${repo_url}' /opt/srotaai
+docker build --tag srotaai:portfolio /opt/srotaai
+docker volume create srotaai-data
+docker run --detach \
+  --name srotaai \
+  --restart unless-stopped \
+  --publish 80:8000 \
+  --env PORT=8000 \
+  --env SROTAAI_DB_PATH=/var/lib/srotaai/srotaai.db \
+  --env SROTAAI_DEMO_READ_ONLY=1 \
+  --log-driver=awslogs \
+  --log-opt awslogs-region='${aws_region}' \
+  --log-opt awslogs-group='${log_group_name}' \
+  --log-opt awslogs-stream="srotaai-$(date +%s)" \
+  --log-opt awslogs-create-group=false \
+  --volume srotaai-data:/var/lib/srotaai \
+  srotaai:portfolio

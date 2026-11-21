@@ -25,6 +25,7 @@ from .project import Project, SourceConfig          # noqa: E402
 from .store import Store, DEFAULT_DB_PATH           # noqa: E402
 from . import connectors_extra                       # noqa: F401,E402  (registers html_stealth, x_stub)
 from . import pii as _pii                            # noqa: E402
+from .ml.ade_classifier import load_bundle as _load_ade_model, predict_text as _predict_ade
 
 # Map Project.connector strings to spike1 REGISTRY keys.
 CONNECTOR_ALIAS = {
@@ -89,6 +90,8 @@ def run_project(
     project.keywords, kw_audit = expand_keywords_layered(project.keywords)
     print(f"keywords (expanded {len(project.keywords)}): {project.keywords[:20]}"
           + ("..." if len(project.keywords) > 20 else ""))
+
+    ade_model = _load_ade_model()
 
     store = Store(db_path or DEFAULT_DB_PATH)
     store.upsert_project(project)
@@ -179,7 +182,8 @@ def run_project(
                                 "source": src.name,
                             })
                         redacted = _pii.redact(rec.text or "")
-                        yield rec, hits, redacted
+                        ml_result = _predict_ade(rec.text or "", ade_model) if ade_model else None
+                        yield rec, hits, redacted, ml_result
 
                 r = store.insert_records(source_id, _stream())
             except Exception as e:                              # noqa: BLE001

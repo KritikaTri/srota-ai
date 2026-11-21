@@ -168,15 +168,20 @@ class SrotaScheduler:
                     if s.name not in srcs:
                         s.enabled = False
                 store.mark_run_started(pid)
-                run_project(project, output_path=None, db_path=self.db_path)
-                # Re-score on every tick so PRR refreshes with new records.
-                from srotaai import signals as signal_job
-                signal_job.run(pid, db_path=self.db_path,
-                               sentiment_filter=False, min_n=3)
-                store.mark_run_completed(pid)
-                run_count += 1
-                store.append_audit("scheduler", "tick.run",
-                                   target=pid, payload={"sources": srcs})
+                try:
+                    run_project(project, output_path=None, db_path=self.db_path)
+                    # Re-score on every tick so PRR refreshes with new records.
+                    from srotaai import signals as signal_job
+                    signal_job.run(pid, db_path=self.db_path,
+                                   sentiment_filter=False, min_n=3)
+                    run_count += 1
+                    store.append_audit("scheduler", "tick.run",
+                                       target=pid, payload={"sources": srcs})
+                except Exception as run_error:
+                    store.mark_run_completed(pid, error=str(run_error))
+                    raise
+                else:
+                    store.mark_run_completed(pid)
             except Exception as e:                                  # noqa: BLE001
                 log.exception("scheduled run failed for %s", pid)
                 last_error = f"{pid}: {e}"

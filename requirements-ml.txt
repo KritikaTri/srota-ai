@@ -1,0 +1,9 @@
+# Optional learned NLP stack. Install this on top of requirements.txt to train
+# and serve transformer NER models. Install a platform-appropriate PyTorch
+# build from https://pytorch.org/get-started/locally/ if pip's default is wrong.
+torch>=2.2
+transformers>=4.44,<5
+accelerate>=0.30
+scikit-learn>=1.5
+sklearn-crfsuite>=0.5
+joblib>=1.4

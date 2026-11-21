@@ -161,10 +161,10 @@
       <div class="font-semibold text-slate-900">Health check</div>
       <div class="text-xs text-slate-500 mt-0.5">/_ping &mdash; server status</div>
     </a>
-    <a href="/projects/new" class="border border-slate-200 rounded-lg p-3 hover:border-blue-400 hover:bg-blue-50/30 transition">
+    {% if not read_only_demo %}<a href="/projects/new" class="border border-slate-200 rounded-lg p-3 hover:border-blue-400 hover:bg-blue-50/30 transition">
       <div class="font-semibold text-slate-900">New Project</div>
       <div class="text-xs text-slate-500 mt-0.5">Start monitoring</div>
-    </a>
+    </a>{% endif %}
   </div>
 </section>
 

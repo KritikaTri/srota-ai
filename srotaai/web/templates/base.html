@@ -91,15 +91,20 @@
       </form>
 
       <div class="flex items-center gap-2 shrink-0 ml-auto">
-        <a href="/projects/new" class="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold px-3.5 py-2 rounded-lg shadow-sm">
+        {% if not read_only_demo %}<a href="/projects/new" class="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold px-3.5 py-2 rounded-lg shadow-sm">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>
           New Project
-        </a>
+        </a>{% endif %}
         <div class="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 grid place-items-center text-white text-xs font-semibold ml-1">DR</div>
       </div>
     </header>
 
     <div class="px-7 py-7">
+      {% if read_only_demo %}
+      <div class="mb-5 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+        <strong>Public read-only demo.</strong> Changes and source ingestion are disabled.
+      </div>
+      {% endif %}
       {% block content %}{% endblock %}
     </div>
   </main>

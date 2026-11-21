@@ -328,11 +328,85 @@ def has_adr_trigger(text: str) -> bool:
     return any(p.search(text) for p in ADR_TRIGGERS)
 
 
+_SPECULATION = re.compile(
+    r"\b(?:wonder if|what if|might|may|could|possibly|perhaps|potential(?:ly)?|"
+    r"risk of|worried about|concerned about|afraid that)\b", re.IGNORECASE)
+_NEGATION = re.compile(
+    r"\b(?:no|not|never|without|denies?|denied|didn.t|doesn.t|isn.t|wasn.t)\b",
+    re.IGNORECASE)
+_ASSERTION = re.compile(
+    r"\b(?:developed|experienced|suffered|got|had|ended up with|started having|caused|causes|triggered|"
+    r"resulted in|after taking|after starting|after using|lene ke baad|ke baad)\b",
+    re.IGNORECASE)
+
+
+def _sentence_bounds(text: str, span: tuple[int, int]) -> tuple[int, int]:
+    start, end = span
+    left = max(text.rfind(mark, 0, start) for mark in (".", "!", "?", ";", "\n"))
+    right_candidates = [text.find(mark, end) for mark in (".", "!", "?", ";", "\n")]
+    right_candidates = [pos for pos in right_candidates if pos >= 0]
+    right = min(right_candidates) if right_candidates else len(text)
+    return left + 1, right
+
+
+def _rule_asserted_pair(text: str, drug: Entity, symptom: Entity) -> bool:
+    """Conservative fallback: require local asserted relation, reject negation/speculation."""
+    drug_bounds = _sentence_bounds(text, drug.span)
+    event_bounds = _sentence_bounds(text, symptom.span)
+    if drug_bounds != event_bounds:
+        return False
+    sentence_start, sentence_end = event_bounds
+    sentence = text[sentence_start:sentence_end]
+    event_start = symptom.span[0] - sentence_start
+    event_end = symptom.span[1] - sentence_start
+    before = sentence[max(0, event_start - 45):event_start]
+    after = sentence[event_end:min(len(sentence), event_end + 35)]
+    if _SPECULATION.search(sentence):
+        return False
+    if _NEGATION.search(before) or re.search(r"\b(?:absent|ruled out|not present)\b", after, re.I):
+        return False
+    assertion_before_event = _ASSERTION.search(sentence[:event_start])
+    temporal_match = re.search(r"\bafter\s+(?:taking|starting|using)\b", sentence, re.I)
+    after_taking_relation = bool(
+        temporal_match and event_end <= temporal_match.start() < drug.span[0] - sentence_start
+    )
+    if assertion_before_event or after_taking_relation:
+        return True
+    return False
+
+
 def extract(text: str, use_spacy: bool = False) -> NerResult:
     """Main entry point. `use_spacy=True` will try scispaCy and merge results."""
     drugs = extract_drugs(text)
     symptoms = extract_symptoms(text)
     method = "dict"
+
+    # If a trained token classifier is installed, merge its span predictions
+    # with the high-precision lexicon. Keep the deterministic path available
+    # when no model artifact has been trained/deployed.
+    try:
+        from .ml.crf_ner import predict as _predict_spans
+        model_spans = _predict_spans(text)
+    except (ImportError, RuntimeError):
+        model_spans = None
+    if model_spans:
+        for span in model_spans:
+            surface = span["text"]
+            low = surface.lower().strip()
+            if span["label"] == "DRUG":
+                normalized = BRAND_TO_GENERIC.get(low, low)
+                drugs.append(Entity("DRUG", surface, (span["start"], span["end"]),
+                                    normalized=normalized,
+                                    brand=low if low in BRAND_TO_GENERIC else None,
+                                    confidence=span["confidence"]))
+            else:
+                normalized = SYNONYM_TO_CANONICAL.get(low, low)
+                symptoms.append(Entity("SYMPTOM", surface, (span["start"], span["end"]),
+                                       normalized=normalized,
+                                       confidence=span["confidence"]))
+        drugs = _dedupe_overlapping(drugs)
+        symptoms = _dedupe_overlapping(symptoms)
+        method = "dict+crf"
 
     if use_spacy:
         spacy_ents = _try_spacy(text)
@@ -341,25 +415,35 @@ def extract(text: str, use_spacy: bool = False) -> NerResult:
             symptoms += [e for e in spacy_ents if e.type == "SYMPTOM"]
             drugs = _dedupe_overlapping(drugs)
             symptoms = _dedupe_overlapping(symptoms)
-            method = "dict+spacy"
+        method = method + "+spacy"
 
     adr_events: list[Entity] = []
     pairs: list[tuple[str, str]] = []
     if drugs and symptoms:
-        has_trigger = has_adr_trigger(text)
-        # Always emit pairs when drug+symptom co-occur in the same record.
-        # Only mark as ADR_EVENT (a stronger claim) when an explicit trigger
-        # phrase is present. This keeps recall high for signal detection
-        # without inflating ADR_EVENT counts.
-        if has_trigger:
-            for s in symptoms:
-                adr_events.append(Entity(
-                    type="ADR_EVENT", text=s.text, span=s.span,
-                    normalized=s.normalized,
-                    confidence=min(0.85, s.confidence + 0.05),
-                ))
+        # Pair extraction uses a learned assertion model when installed;
+        # otherwise use sentence-local rules that reject negated/speculative
+        # mentions rather than treating every co-mention as an ADR.
         for d in drugs:
             for s in symptoms:
+                try:
+                    from .ml.relation import predict as _predict_relation
+                    relation = _predict_relation(text, d.span, s.span)
+                except (ImportError, RuntimeError):
+                    relation = None
+                if relation is not None:
+                    if relation["label"] != "adverse":
+                        continue
+                    pair_confidence = relation["probability"]
+                else:
+                    if not _rule_asserted_pair(text, d, s):
+                        continue
+                    pair_confidence = min(0.85, s.confidence + 0.05)
+                if not any(e.span == s.span for e in adr_events):
+                    adr_events.append(Entity(
+                        type="ADR_EVENT", text=s.text, span=s.span,
+                        normalized=s.normalized,
+                        confidence=pair_confidence,
+                    ))
                 pairs.append((d.normalized or d.text.lower(),
                               s.normalized or s.text.lower()))
 

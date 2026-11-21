@@ -8,7 +8,9 @@ from __future__ import annotations
 import csv
 import io
 import json
+import os
 import re
+import shutil
 from pathlib import Path
 
 from fastapi import FastAPI, Form, Request, HTTPException, BackgroundTasks
@@ -30,8 +32,11 @@ from srotaai.scheduler import SrotaScheduler
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 WEB_DIR = Path(__file__).resolve().parent
-DB_PATH = ROOT / "srotaai.db"
+DB_PATH = Path(os.getenv("SROTAAI_DB_PATH", str(ROOT / "srotaai.db")))
 PROJECTS_DIR = ROOT / "projects"
+DEMO_READ_ONLY = os.getenv("SROTAAI_DEMO_READ_ONLY", "").strip().lower() in {
+    "1", "true", "yes", "on",
+}
 
 app = FastAPI(title="SrotaAI", default_response_class=HTMLResponse)
 # Compress HTML/JSON/CSS responses >1KB. Single biggest perceived-speed win:
@@ -50,6 +55,16 @@ templates.env.globals["build_id"] = _BUILD_ID
 # embedded webview. Static files keep normal caching semantics.
 @app.middleware("http")
 async def _no_cache_html(request, call_next):
+    if DEMO_READ_ONLY and request.method in {"POST", "PUT", "PATCH", "DELETE"}:
+        return HTMLResponse(
+            "<!doctype html><html><title>Read-only demo</title><body "
+            "style='font:16px system-ui;padding:2rem;color:#0f172a'>"
+            "<h1>Public demo is read-only</h1>"
+            "<p>Project changes and ingestion are disabled in this public demo.</p>"
+            "<p><a href='/'>Return to SrotaAI</a></p></body></html>",
+            status_code=403,
+            headers={"Cache-Control": "no-store"},
+        )
     response = await call_next(request)
     ct = response.headers.get("content-type", "")
     if ct.startswith("text/html"):
@@ -65,6 +80,16 @@ async def _no_cache_html(request, call_next):
 
 @app.on_event("startup")
 def _start_scheduler() -> None:
+    # A fresh checkout includes a demo snapshot, while Store() otherwise
+    # creates an empty database. Seed only on first launch; never overwrite
+    # data from a previous run.
+    if not DB_PATH.exists():
+        seed_path = ROOT / "srotaai_seed.db"
+        if seed_path.is_file():
+            DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(seed_path, DB_PATH)
+    if DEMO_READ_ONLY:
+        return
     try:
         SrotaScheduler.get(DB_PATH).start()
     except Exception:
@@ -84,6 +109,7 @@ def _common(active: str, store) -> dict:
     return {
         "active":   active,
         "version":  "v1.2.4-stable",
+        "read_only_demo": DEMO_READ_ONLY,
         "kpis":     M.system_kpis(store),
     }
 
@@ -250,6 +276,8 @@ def global_search(request: Request, q: str = ""):
 # ---------------------------------------------------------------------------
 @app.get("/projects/new")
 def project_create_form(request: Request):
+    if DEMO_READ_ONLY:
+        return RedirectResponse("/projects", status_code=303)
     s = _store()
     try:
         ctx = _common("projects", s)
@@ -284,14 +312,23 @@ async def project_create_submit(
         kws = [k.strip() for k in keywords.replace(",", "\n").splitlines()
                if k.strip()]
 
-        if not project_id.strip() or not kws or not sources:
+        project_id = project_id.strip().lower()
+        invalid_id = not re.fullmatch(r"[a-z0-9][a-z0-9_-]{0,63}", project_id)
+        valid_lookback = 1 <= int(lookback_days) <= 3650
+        valid_sources = (
+            isinstance(sources, list) and bool(sources)
+            and all(isinstance(src, dict) and isinstance(src.get("connector"), str)
+                    and src["connector"].strip() for src in sources)
+        )
+        if invalid_id or not kws or not valid_sources or not valid_lookback:
             ctx = _common("projects", s)
             ctx.update(
                 page_title="Create Project",
                 form={"id": project_id, "name": name,
                       "description": description, "keywords": keywords,
                       "lookback_days": lookback_days, "cadence": cadence},
-                error="Project name, at least one keyword, and at least one source are required.",
+                error=("Use a project ID with letters, numbers, hyphens, or underscores; "
+                       "provide a keyword and valid source; and set lookback to 1–3650 days."),
             )
             return templates.TemplateResponse(request, "project_create.html",
                                               ctx, status_code=400)
@@ -325,14 +362,9 @@ async def project_create_submit(
         s.set_project_status(proj.id, "running")
         PROJECTS_DIR.mkdir(parents=True, exist_ok=True)
         proj.to_yaml(PROJECTS_DIR / f"{proj.id}.yaml")
-        # Kick off the first run immediately in a thread; the scheduler will
-        # then take over per cadence.
-        import threading
-        from srotaai.scheduler import SrotaScheduler
-        threading.Thread(
-            target=lambda: SrotaScheduler.get(DB_PATH)._tick(),  # type: ignore
-            daemon=True, name=f"srota-bootstrap-{proj.id}",
-        ).start()
+        # Let the user start the first run from the project page. Starting a
+        # scheduler tick here raced with the manual Run action and could launch
+        # two ingestion jobs for the same new project.
         return RedirectResponse(f"/projects/{proj.id}", status_code=303)
     finally:
         s.close()
@@ -413,27 +445,24 @@ def project_run_now(pid: str, background_tasks: BackgroundTasks):
         s.close()
 
     def _do_run(project: Project):
+        run_error = None
         try:
             runner_mod.run_project(project, output_path=None,
                                    db_path=str(DB_PATH))
             signal_job.run(project.id, db_path=DB_PATH,
                            sentiment_filter=False, min_n=2)
         except Exception as exc:                              # noqa: BLE001
+            run_error = str(exc)
             print(f"[run_now] {project.id} failed: {exc!r}")
         finally:
             s2 = _store()
             try:
-                s2.mark_run_completed(project.id)
+                s2.mark_run_completed(project.id, error=run_error)
             finally:
                 s2.close()
 
     background_tasks.add_task(_do_run, proj)
-    return JSONResponse({
-        "ok": True,
-        "status": "started",
-        "project": pid,
-        "msg": "Ingest + signal detection running in background; refresh in ~30s.",
-    })
+    return RedirectResponse(f"/projects/{pid}", status_code=303)
 
 
 @app.post("/projects/{pid}/sources/add")
@@ -443,6 +472,10 @@ def project_add_source(pid: str,
     """Attach an external HTML page (e.g. tata1mg, drugs.com) as a new
     source on a project. Uses the html_stealth connector with sane defaults.
     """
+    from urllib.parse import urlsplit
+    parsed_url = urlsplit(url.strip())
+    if parsed_url.scheme not in ("http", "https") or not parsed_url.netloc:
+        raise HTTPException(400, "Source URL must use http or https")
     s = _store()
     try:
         proj_dict = s.load_project(pid)
@@ -495,7 +528,8 @@ def project_records_csv(pid: str):
             """SELECT r.id, r.posted_at, r.ingested_at, r.url,
                       r.text_redacted, r.matched_keywords_json,
                       r.sentiment_label, r.sentiment_score, r.pii_hits_count,
-                      r.entities_json,
+                      r.entities_json, r.ml_ade_probability,
+                      r.ml_ade_label, r.ml_model_version,
                       src.name AS source_name, src.connector
                  FROM records r JOIN sources src ON src.id = r.source_id
                  WHERE src.project_id = ?
@@ -508,6 +542,7 @@ def project_records_csv(pid: str):
     w.writerow(["id", "posted_at", "ingested_at", "source", "connector",
                 "url", "matched_keywords", "sentiment_label",
                 "sentiment_score", "pii_hits", "entities_count",
+                "ade_probability", "ade_model_label", "ade_model_version",
                 "text_redacted"])
     for r in rows:
         ents = []
@@ -524,6 +559,9 @@ def project_records_csv(pid: str):
             f'{(r["sentiment_score"] or 0):.3f}',
             r["pii_hits_count"] or 0,
             len(ents),
+            r["ml_ade_probability"] if r["ml_ade_probability"] is not None else "",
+            r["ml_ade_label"] or "",
+            r["ml_model_version"] or "",
             (r["text_redacted"] or "").replace("\n", " ").replace("\r", " "),
         ])
     buf.seek(0)
@@ -557,6 +595,17 @@ def signal_detail(request: Request, sig_id: int):
 def project_delete(pid: str):
     s = _store()
     try:
+        row = s.conn.execute(
+            "SELECT last_started_at, last_completed_at FROM projects WHERE id=?",
+            (pid,),
+        ).fetchone()
+        if row is None:
+            raise HTTPException(404)
+        if row["last_started_at"] and (
+            not row["last_completed_at"]
+            or row["last_started_at"] > row["last_completed_at"]
+        ):
+            raise HTTPException(409, "Project run is still in progress")
         s.delete_project(pid)
         yaml_path = PROJECTS_DIR / f"{pid}.yaml"
         if yaml_path.exists():

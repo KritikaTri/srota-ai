@@ -96,6 +96,7 @@ CREATE TABLE IF NOT EXISTS signals (
     drug            TEXT NOT NULL,
     event           TEXT NOT NULL,
     prr             REAL,
+    ror             REAL,
     chi2            REAL,
     ic              REAL,
     n               INTEGER,
@@ -170,6 +171,7 @@ class Store:
         self.conn.executescript(SCHEMA)
         self._migrate_records_v2()
         self._migrate_projects_v2()
+        self._migrate_signals_v2()
         self.conn.commit()
 
     # ---- schema migration ------------------------------------------------
@@ -184,6 +186,9 @@ class Store:
             ("sentiment_label", "TEXT"),
             ("pii_hits_count",  "INTEGER NOT NULL DEFAULT 0"),
             ("entities_json",   "TEXT"),
+            ("ml_ade_probability", "REAL"),
+            ("ml_ade_label", "TEXT"),
+            ("ml_model_version", "TEXT"),
         ]
         for col, typ in adds:
             try:
@@ -205,6 +210,7 @@ class Store:
             ("cadence",           "TEXT NOT NULL DEFAULT 'daily'"),
             ("last_started_at",   "TEXT"),
             ("last_completed_at", "TEXT"),
+            ("last_run_error",    "TEXT"),
         ]
         for col, typ in adds:
             try:
@@ -212,6 +218,13 @@ class Store:
             except sqlite3.OperationalError as e:
                 if "duplicate column" not in str(e).lower():
                     raise
+
+    def _migrate_signals_v2(self) -> None:
+        try:
+            self.conn.execute("ALTER TABLE signals ADD COLUMN ror REAL")
+        except sqlite3.OperationalError as e:
+            if "duplicate column" not in str(e).lower():
+                raise
 
     # ---- lifecycle -------------------------------------------------------
     def close(self) -> None:
@@ -325,6 +338,7 @@ class Store:
         rec,
         matched_keywords: Optional[list[str]] = None,
         text_redacted: Optional[str] = None,
+        ml_result: Optional[dict] = None,
     ) -> bool:
         """Insert one RawRecord. Returns True if a new row was written.
 
@@ -372,8 +386,9 @@ class Store:
                 (source_id, external_id, content_hash, url, posted_at,
                  text_redacted, raw_encrypted, author_handle, language_hint,
                  source_kind, matched_keywords_json, ingested_at,
-                 sentiment_score, sentiment_label, pii_hits_count, entities_json)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 sentiment_score, sentiment_label, pii_hits_count, entities_json,
+                 ml_ade_probability, ml_ade_label, ml_model_version)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 source_id, rec.external_id, chash, rec.url, _iso(rec.posted_at),
@@ -382,6 +397,9 @@ class Store:
                 json.dumps(matched_keywords or []),
                 _utcnow_iso(),
                 sent_score, sent_label, pii_count, entities_payload,
+                ml_result.get("probability") if ml_result else None,
+                ml_result.get("label") if ml_result else None,
+                ml_result.get("model_version") if ml_result else None,
             ),
         )
         return cur.rowcount > 0
@@ -397,9 +415,11 @@ class Store:
         """
         result = InsertResult()
         with self._tx():
-            for rec, hits, redacted in items:
+            for item in items:
+                rec, hits, redacted = item[:3]
+                ml_result = item[3] if len(item) > 3 else None
                 result.fetched += 1
-                wrote = self.insert_record(source_id, rec, hits, redacted)
+                wrote = self.insert_record(source_id, rec, hits, redacted, ml_result)
                 if wrote:
                     result.inserted += 1
                 else:
@@ -583,13 +603,13 @@ class Store:
 
     def mark_run_started(self, project_id: str) -> None:
         with self._tx() as c:
-            c.execute("UPDATE projects SET last_started_at=? WHERE id=?",
+            c.execute("UPDATE projects SET last_started_at=?, last_run_error=NULL WHERE id=?",
                       (_utcnow_iso(), project_id))
 
-    def mark_run_completed(self, project_id: str) -> None:
+    def mark_run_completed(self, project_id: str, error: str | None = None) -> None:
         with self._tx() as c:
-            c.execute("UPDATE projects SET last_completed_at=? WHERE id=?",
-                      (_utcnow_iso(), project_id))
+            c.execute("UPDATE projects SET last_completed_at=?, last_run_error=? WHERE id=?",
+                      (_utcnow_iso(), (error or "")[:1000] or None, project_id))
 
     def load_project(self, project_id: str) -> Optional[dict]:
         """Reconstruct the full project payload (project + sources) from DB.
@@ -621,6 +641,7 @@ class Store:
             "cadence":         (prow["cadence"] if "cadence" in prow.keys() else "daily"),
             "last_started_at": (prow["last_started_at"] if "last_started_at" in prow.keys() else None),
             "last_completed_at": (prow["last_completed_at"] if "last_completed_at" in prow.keys() else None),
+            "last_run_error": (prow["last_run_error"] if "last_run_error" in prow.keys() else None),
             "sources": [
                 {
                     "name":        s["name"],

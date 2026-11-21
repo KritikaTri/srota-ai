@@ -1,4 +1,7 @@
 .venv
+.env
+.env.*
+!.env.example
 __pycache__
 *.pyc
 .git
@@ -7,3 +10,8 @@ server.log
 archive
 spike_outputs
 node_modules
+data/ml
+models
+terraform.tfvars
+*.tfstate*
+.terraform

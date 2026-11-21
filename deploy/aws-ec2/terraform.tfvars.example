@@ -1,0 +1,4 @@
+aws_region    = "ap-south-1"
+instance_type = "t3.small"
+repo_url      = "https://github.com/KritikaTri/srota-ai.git"
+repo_branch   = "main"

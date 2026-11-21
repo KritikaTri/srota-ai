@@ -1,0 +1,16 @@
+{
+  "group": "unique-source-post-id",
+  "split": "train",
+  "language": "en|hi|hinglish|other",
+  "text": "replace with the full post text",
+  "ade_label": "ade|not_ade",
+  "entities": [
+    {"start": 0, "end": 8, "label": "DRUG"},
+    {"start": 20, "end": 24, "label": "EVENT"}
+  ],
+  "relations": [
+    {"drug": [0, 8], "event": [20, 24], "label": "adverse|negated|speculative|co_mention"}
+  ],
+  "annotator": "initials-or-id",
+  "adjudicated": false
+}

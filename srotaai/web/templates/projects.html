@@ -60,7 +60,13 @@
   </table>
   </div>
   {% else %}
-  <div class="p-8">{{ ui.empty_state('No projects yet', 'Create your first monitoring project to start ingesting and triaging signals.', '+ New Project', '/projects/new') }}</div>
+  <div class="p-8">
+    {% if read_only_demo %}
+      {{ ui.empty_state('No projects yet', 'The public demo has no sample projects loaded.') }}
+    {% else %}
+      {{ ui.empty_state('No projects yet', 'Create your first monitoring project to start ingesting and triaging signals.', '+ New Project', '/projects/new') }}
+    {% endif %}
+  </div>
   {% endif %}
 </section>
 {% endblock %}

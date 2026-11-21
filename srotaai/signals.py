@@ -26,13 +26,25 @@ THRESH_CHI2 = 4.0
 THRESH_N = 3
 
 
-def _compute(rows: list[tuple[str, str]], min_n: int = THRESH_N,
+def _compute(
+    reports: list[tuple[set[str], set[str], set[tuple[str, str]]]],
+    min_n: int = THRESH_N,
              prr_thresh: float = THRESH_PRR, chi2_thresh: float = THRESH_CHI2):
-    """Identical math to spike3.compute_signals — kept here so the module is self-contained."""
-    drug_event = Counter(rows)
-    drug_total = Counter(d for d, _ in rows)
-    event_total = Counter(e for _, e in rows)
-    N = len(rows)
+    """Score drug/event pairs from report-level 2x2 tables.
+
+    Each report contributes once to the project population, regardless of how
+    many entities it mentions. This is the reporting-unit denominator used by
+    disproportionality methods; counting only co-occurrence pairs makes the
+    negative cells vanish and inflates PRR.
+    """
+    N = len(reports)
+    drug_total: Counter[str] = Counter()
+    event_total: Counter[str] = Counter()
+    drug_event: Counter[tuple[str, str]] = Counter()
+    for drugs, events, pairs in reports:
+        drug_total.update(drugs)
+        event_total.update(events)
+        drug_event.update(pairs)
 
     out = []
     for (drug, event), n_de in drug_event.items():
@@ -44,19 +56,23 @@ def _compute(rows: list[tuple[str, str]], min_n: int = THRESH_N,
         d = max(0, N - a - b - c)
 
         a_, b_, c_, d_ = a, b, c, d
-        if 0 in (a_, b_, c_, d_):                       # Haldane-Anscombe correction
-            a_, b_, c_, d_ = a_ + 0.5, b_ + 0.5, c_ + 0.5, d_ + 0.5
+        if 0 in (a_, b_, c_, d_):                       # Haldane–Anscombe
+            a_, b_, c_, d_ = (v + 0.5 for v in (a_, b_, c_, d_))
         prr_num = a_ / (a_ + b_) if (a_ + b_) else 0
         prr_den = c_ / (c_ + d_) if (c_ + d_) else 1e-9
         prr = prr_num / prr_den if prr_den > 0 else 0
-        expected_a = (a + b) * (a + c) / N if N else 1
-        chi2 = ((abs(a - expected_a) - 0.5) ** 2) / expected_a if expected_a else 0
+        ror = (a_ * d_) / (b_ * c_) if b_ * c_ else 0
+        expected_a = (a + b) * (a + c) / N if N else 0
+        denom = (a + b) * (c + d) * (a + c) * (b + d)
+        chi2 = (N * max(0.0, abs(a * d - b * c) - N / 2) ** 2 / denom
+                if denom else 0.0)
         ic = math.log2((a + 0.5) / (expected_a + 0.5)) if expected_a + 0.5 > 0 else 0
 
         is_signal = prr >= prr_thresh and chi2 >= chi2_thresh and a >= min_n
         out.append({
             "drug": drug, "event": event, "n": a,
-            "prr": round(prr, 3), "chi2": round(chi2, 3), "ic": round(ic, 3),
+            "prr": round(prr, 3), "ror": round(ror, 3),
+            "chi2": round(chi2, 3), "ic": round(ic, 3),
             "is_signal": is_signal,
         })
     out.sort(key=lambda s: (-s["is_signal"], -s["prr"]))
@@ -64,7 +80,7 @@ def _compute(rows: list[tuple[str, str]], min_n: int = THRESH_N,
 
 
 def run(project_id: str, db_path: Path | None = None,
-        sentiment_filter: bool = True,
+        sentiment_filter: bool = False,
         min_n: int = THRESH_N,
         prr_thresh: float = THRESH_PRR,
         chi2_thresh: float = THRESH_CHI2) -> dict:
@@ -74,7 +90,7 @@ def run(project_id: str, db_path: Path | None = None,
     ).fetchone()
     if not proj:
         store.close()
-        raise SystemExit(f"unknown project '{project_id}'")
+        raise ValueError(f"unknown project '{project_id}'")
 
     rows = store.conn.execute(
         """SELECT r.text_redacted, r.posted_at
@@ -83,7 +99,7 @@ def run(project_id: str, db_path: Path | None = None,
         (project_id,),
     ).fetchall()
 
-    pairs: list[tuple[str, str]] = []
+    reports: list[tuple[set[str], set[str], set[tuple[str, str]]]] = []
     pair_examples: dict[tuple[str, str], list[str]] = {}
     n_records = 0
     n_with_pairs = 0
@@ -101,24 +117,21 @@ def run(project_id: str, db_path: Path | None = None,
                 latest = ts
 
         ner_res = ner.extract(text)
-        if not ner_res.drug_event_pairs:
-            continue
+        drugs = {e.normalized or e.text.lower() for e in ner_res.drugs}
+        pairs = {(d, e) for d, e in ner_res.drug_event_pairs}
+        events = {event for _, event in pairs}
         if sentiment_filter:
             s = _sent.analyze(text)
             if s.label not in ("adverse", "negative"):
                 continue
-        n_with_pairs += 1
-        # IMPORTANT: dedupe pairs WITHIN this record. The PV interpretation
-        # of n is "distinct reports/records mentioning this drug × event",
-        # not "raw co-occurrence count". A single Reddit post that says
-        # "metformin gave me lactic acidosis. metformin is awful, lactic
-        # acidosis ruined me" should count as 1, not 4. Keeps the math
-        # honest and aligned with FAERS practice.
-        for pair in set(ner_res.drug_event_pairs):
-            pairs.append(pair)
+        if pairs:
+            n_with_pairs += 1
+        # One unit per source record, independent of repeated mentions.
+        reports.append((drugs, events, pairs))
+        for pair in pairs:
             pair_examples.setdefault(pair, []).append(text[:140])
 
-    signals = _compute(pairs, min_n=min_n, prr_thresh=prr_thresh,
+    signals = _compute(reports, min_n=min_n, prr_thresh=prr_thresh,
                        chi2_thresh=chi2_thresh)
     flagged = [s for s in signals if s["is_signal"]]
 
@@ -127,22 +140,24 @@ def run(project_id: str, db_path: Path | None = None,
         for s in signals:
             c.execute(
                 """INSERT OR IGNORE INTO signals
-                   (project_id, drug, event, prr, chi2, ic, n,
+                   (project_id, drug, event, prr, ror, chi2, ic, n,
                     window_since, window_until, computed_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                (project_id, s["drug"], s["event"], s["prr"], s["chi2"],
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (project_id, s["drug"], s["event"], s["prr"], s["ror"], s["chi2"],
                  s["ic"], s["n"], earliest, latest, computed_at),
             )
     store.append_audit("signal_job", "signals.computed", target=project_id,
                        payload={"records": n_records, "with_pairs": n_with_pairs,
-                                "rows": len(signals), "flagged": len(flagged)})
+                                "rows": len(signals), "flagged": len(flagged),
+                                "report_population": len(reports)})
     store.close()
 
     summary = {
         "project_id": project_id,
         "records_scanned": n_records,
         "records_with_pairs": n_with_pairs,
-        "pair_count": len(pairs),
+        "report_population": len(reports),
+        "pair_count": sum(len(pairs) for _, _, pairs in reports),
         "cells_evaluated": len(signals),
         "flagged_signals": flagged,
         "thresholds": {"prr": prr_thresh, "chi2": chi2_thresh, "n": min_n},
